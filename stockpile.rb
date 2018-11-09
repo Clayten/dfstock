@@ -1,3 +1,4 @@
+require 'protocol_buffers'
 class DwarfFortressUtils
 
   # The goal is to toggle stock by specific item, by material, or by regex, and globally or in a category
@@ -22,8 +23,10 @@ class DwarfFortressUtils
 
     # Use the DFHack ProtocolBuffer protofile to define our base stockpile settings object
     def self.load_proto_description
-      return if Dfstockpiles::StockpileSettings rescue nil
+      # return if Dfstockpiles::StockpileSettings rescue nil
+      return true if const_defined?(:Dfstockpiles)
       load "#{File.dirname __FILE__}/stockpiles.pb.rb"
+      # load "#{File.dirname __FILE__}/stockpiles_pb.rb"
     end
     load_proto_description
 
@@ -184,6 +187,16 @@ class DwarfFortressUtils
       item ||= elements.pop
       prefix = elements.join ','
       get(prefix).delete item
+    end
+
+    def self.token_to_id tok
+      tokens[tok]
+    end
+
+    def self.id_to_token _type = nil, _index = nil, type: nil, index: nil, food_index: nil
+      type  ||= _type
+      index ||= _index
+      materials[type][index]
     end
     
     def to_s ; pile.to_s end
