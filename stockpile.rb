@@ -71,12 +71,32 @@ module DFStock
   end
 end
 
+# A Stock 'Thing' is a bit conceptual, as I'm modelling quality levels that way as well as items
+# mostly though, things are a plant, or are made of a plant material, for example. One is a plant raw, the other a plant material.
+# A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
+# As such, material questions about a conceptual strawberry plant are necessarily a bit vague.
 module DFStock
+  module Raw
+    def raw_mod ; end
+  end
+
+  module Material
+    def material_mod ; end
+  end
+
+  module PlantMaterial
+    include Material
+    def plant_mod ; end
+  end
+
   class Thing
     def self.find_material_info id, cat ; df::MaterialInfo.new cat, id end
     def self.find_material id, cat = 0 ; find_material_info(cat, id).material end # FIXME How to create the material directly?
+
+    # (34, :fish) -> 
     def self.find_organic cat_index, cat_name
       cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
+      raise "Unknown category '#{cat_name}'" unless cat_num
       mat_type  = df.world.raws.mat_table.organic_types[  cat_num][cat_index]
       mat_index = df.world.raws.mat_table.organic_indexes[cat_num][cat_index]
       # p [:f_o, cat_index, cat_name, cat_num, mat_type, mat_index]
@@ -88,9 +108,21 @@ module DFStock
     def  toggle   ; set !enabled? end
     def set   x   ; x ? enable : disable end
 
-    def cache name
+    # Cache lookups - this is pretty important for performance
+    def self.cache *name, &b
+      name = name.first if name.length == 1
+      cache_id ||= [self, name]
+      # p [:cache_, cache_id, @@cache.include?(cache_id)]
+      return @@cache[cache_id] if @@cache.include?(cache_id)
+      # p [:cache_, :working]
+      @@cache[cache_id] = yield
+    end
+    def cache *name, &b
+      name = name.first if name.length == 1
       cache_id = [self.class, link_idx, name]
-      @@cache.include?(cache_id) ? @@cache[cache_id] : @@cache[cache_id] = yield
+      # p [:cache, cache_id]
+      return @@cache[cache_id] if @@cache.include?(cache_id)
+      @@cache[cache_id] = yield
     end
 
     def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } @link_idx=#{link_idx}#{" @link=#{link.class}" if link}" end
@@ -99,15 +131,56 @@ module DFStock
     attr_reader :link_idx, :link
     def initialize link_idx, link: nil
       raise "Can't instantiate the base class" if self.class == Thing
-      @link_idx = link_idx
+      @link_idx = link_idx # The index into the 'link'ed array for the thing
       @link     = link
       @@cache ||= {}
     end
   end
 
+  class SomeThing < Thing
+    def material ; raw.material end
+    include PlantMaterial
+  end
+
+  class Stone < Thing
+    include Material
+    include Raw
+
+    def stone_idx ; link_idx end
+    def initialize idx
+      super
+    end
+  end
+
+  class Ore < Stone
+    #private
+    def build_idx_translation_table
+      return Hash.new(1) # FIXME
+
+      table = {}
+      count = 0
+      stones.each_with_index {|s,i| table[count] = i if s.is_ore? }
+    end
+
+    def ore_idx_to_stone_idx ore_idx
+      (@translation ||= build_idx_translation_table)[ore_idx]
+    end
+
+    #public
+
+    attr_reader :ore_idx
+
+    # The goal is to refer to ore[0] instead of stones[?], so ore[0] needs a stone index
+    def initialize idx
+      @ore_idx = idx
+      super ore_idx_to_stone_idx ore_idx
+    end
+  end
+
+  # food/fish[0] = Cuttlefish(F) = raws.creatures.all[446 = raws.mat_table.organic_indexes[1 = :Fish][0]]
 
   class Creature < Thing
-    def self.find_creature id ; creature = df.world.raws.creatures.all[id] end
+    def self.find_creature id ; cache(:creature, id) { df.world.raws.creatures.all[id] } end
 
     def edible?           ; true end # What won't they eat? Lol! FIXME?
     def lays_eggs?        ; cache(:eggs   ) { creature.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
@@ -129,256 +202,256 @@ module DFStock
     end
   end
 
-  class Material < Thing
-
-    def stone? ; flags.to_hash[:IS_STONE] end
-    # def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-
-    def color ; material.color end
-
-    def token ; @material.id end
-    def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx} token=#{token}" end
-
-    attr_reader :material
-    def initialize id, link: nil
-      super id, link: link
-      @material = self.class.find_material_info id, 0
-      raise RuntimeError, "Unknown material id: #{id}" unless material
-    end
-  end
-
-  class Stone < Material
-    def self.find_stone id ; id end
-
-    def color ; stone.color end
-
-    def token ; @stone.id end
-    def to_s ; "#{super} @stone_id=#{id} token=#{token}" end
-
-    alias stone material
-    def initialize id, link: nil
-      super id, link: link
-      raise RuntimeError, "Unknown stone id: #{id}" unless stone && stone.stone?
-    end
-  end
-
-
-  class Metal < Material
-    def self.find_metal id ; id end
-
-    def token ; @metal end
-    def to_s ; "#{super} @metal_id=#{id} token=#{token}" end
-
-    attr_reader :metal
-    def initialize id, link: nil
-      super id, link: link
-      @metal = self.class.find_metal id
-      raise RuntimeError, "Unknown metal id: #{id}" unless metal
-    end
-  end
-
-
-  class Fish < Thing
-    def self.find_fish id ; find_organic id, :Fish end
-
-    def token ; @fish end
-    def to_s ; "#{super} @fish_id=#{id} token=#{token}" end
-
-    attr_reader :fish
-    def initialize id, link: nil
-      super
-      @fish = self.class.find_fish id
-      raise RuntimeError, "Unknown fish id: #{id}" unless fish
-    end
-  end
-
-
-  class Meat < Thing
-    def self.find_meat id ; find_organic id, :Meat end
-
-    def token ; @meat end
-    def to_s ; "#{super} @meat_id=#{id} token=#{token}" end
-
-    attr_reader :meat
-    def initialize id, link: nil
-      super id, link: link
-      @meat = self.class.find_meat id
-      raise RuntimeError, "Unknown meat id: #{id}" unless meat
-    end
-  end
-
-
-  class Furniture < Thing
-    def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
-
-    def token ; @furniture end
-    def to_s ; "#{super} @furniture_id=#{id} token=#{token}" end
-
-    attr_reader :furniture
-    def initialize id, link: nil
-      super id, link: link
-      @furniture = self.class.find_furniture id
-      raise RuntimeError, "Unknown furniture id: #{id}" unless furniture
-    end
-  end
-
-  class PlantRaw < Thing
-    def self.find_plant id ; df.world.raws.plants.all[id] end
-
-    def flags ; plant.flags end
-
-    def tree? ; flags.to_hash[:TREE] end
-
-    def color ; plant.material[0].basic_color end
-    def build_color ; plant.material[0].build_color end
-    # def density ; plant.material[0].solid_density end
-
-    def materials      ; plant.material end
-
-    def food_mat_indexes
-      Hash[materials.map {|m|
-        idxs = m.food_mat_index.to_hash.select {|k,v| v != -1 }
-        [m.id, idxs]
-      }]
-    end
-
-    def material_ids   ; materials.map &:id end
-
-    def mill?       ; material_ids.include? 'MILL' end
-    def drink?      ; material_ids.include? 'DRINK' end
-    def wood?       ; material_ids.include? 'WOOD' end
-    def seed?       ; material_ids.include? 'SEED' end
-    def leaf?       ; material_ids.include? 'LEAF' end
-    def thread?     ; material_ids.include? 'THREAD' end
-    def structural? ; material_ids.include? 'STRUCTURAL' end
-
-    def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
-    def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
-    def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
-    def mat_seed       ; material_ids.find {|id| id == 'SEED' } end
-    def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
-    def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
-    def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
-
-    def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-
-    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
-    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
-    def edible?         ; edible_cooked? || edible_raw? end
-    def brewable?       ; material_flags[:ALCOHOL_PLANT] end
-
-    def millable?       ; !!mat_thread end
-
-    def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
-    def above_ground? ; !subterranean end
-
-    def token ; plant.id end
-    def to_s ; "#{super} @plant_id=#{id} token=#{token}" end
-
-    attr_reader :plant
-    def initialize id, link: nil
-      super id, link: link
-      @plant = self.class.find_plant id
-      raise RuntimeError, "Unknown plant id: #{id}" unless plant
-    end
-  end
-
-  class Plant < PlantRaw
-    def initialize *a
-      super
-      raise ArgumentError, "Unknown food-plant id: #{id}" unless plant && food_plant?
-    end
-  end
-
-  class Seed < PlantRaw
-    def initialize *a
-      super
-      raise ArgumentError, "Unknown seed id: #{id}" unless plant && seed?
-    end
-  end
-
-  class Leaf < PlantRaw
-    def initialize *a
-      super
-      raise ArgumentError, "Unknown leaf id: #{id}" unless plant && leaf?
-    end
-  end
-
-  # Really "Tree", because the list include non-wood bearing trees.
-  class Wood < PlantRaw
-    def mat_wood ; super || mat_structural end
-    def density ; mat_wood.solid_density end
-
-    alias wood plant
-    def initialize *a
-      super
-      raise ArgumentError, "Unknown wood id: #{id}" unless wood && tree?
-    end
-  end
-
-  class Quality < Thing
-    def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
-
-    def token ; @quality end
-    def to_s ; "#{super} @quality_id=#{id} token=#{token}" end
-
-    attr_reader :quality
-    def initialize id, link: nil
-      super id, link: link
-      @quality = self.class.find_quality id
-      raise RuntimeError, "Unknown quality level: #{id}" unless quality
-    end
-  end
-
+#   class Material < Thing
+# 
+#     def stone? ; flags.to_hash[:IS_STONE] end
+#     # def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
+# 
+#     def color ; material.color end
+# 
+#     def token ; @material.id end
+#     def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx} token=#{token}" end
+# 
+#     attr_reader :material
+#     def initialize id, link: nil
+#       super id, link: link
+#       @material = self.class.find_material_info id, 0
+#       raise RuntimeError, "Unknown material id: #{id}" unless material
+#     end
+#   end
+# 
+#   class Stone < Material
+#     def self.find_stone id ; id end
+# 
+#     def color ; stone.color end
+# 
+#     def token ; @stone.id end
+#     def to_s ; "#{super} @stone_id=#{id} token=#{token}" end
+# 
+#     alias stone material
+#     def initialize id, link: nil
+#       super id, link: link
+#       raise RuntimeError, "Unknown stone id: #{id}" unless stone && stone.stone?
+#     end
+#   end
+# 
+# 
+#   class Metal < Material
+#     def self.find_metal id ; id end
+# 
+#     def token ; @metal end
+#     def to_s ; "#{super} @metal_id=#{id} token=#{token}" end
+# 
+#     attr_reader :metal
+#     def initialize id, link: nil
+#       super id, link: link
+#       @metal = self.class.find_metal id
+#       raise RuntimeError, "Unknown metal id: #{id}" unless metal
+#     end
+#   end
+# 
+# 
+#   class Fish < Thing
+#     def self.find_fish id ; find_organic id, :Fish end
+# 
+#     def token ; @fish end
+#     def to_s ; "#{super} @fish_id=#{id} token=#{token}" end
+# 
+#     attr_reader :fish
+#     def initialize id, link: nil
+#       super
+#       @fish = self.class.find_fish id
+#       raise RuntimeError, "Unknown fish id: #{id}" unless fish
+#     end
+#   end
+# 
+# 
+#   class Meat < Thing
+#     def self.find_meat id ; find_organic id, :Meat end
+# 
+#     def token ; @meat end
+#     def to_s ; "#{super} @meat_id=#{id} token=#{token}" end
+# 
+#     attr_reader :meat
+#     def initialize id, link: nil
+#       super id, link: link
+#       @meat = self.class.find_meat id
+#       raise RuntimeError, "Unknown meat id: #{id}" unless meat
+#     end
+#   end
+# 
+# 
+#   class Furniture < Thing
+#     def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
+# 
+#     def token ; @furniture end
+#     def to_s ; "#{super} @furniture_id=#{id} token=#{token}" end
+# 
+#     attr_reader :furniture
+#     def initialize id, link: nil
+#       super id, link: link
+#       @furniture = self.class.find_furniture id
+#       raise RuntimeError, "Unknown furniture id: #{id}" unless furniture
+#     end
+#   end
+# 
+#   class PlantRaw < Thing
+#     def self.find_plant id ; df.world.raws.plants.all[id] end
+# 
+#     def flags ; plant.flags end
+# 
+#     def tree? ; flags.to_hash[:TREE] end
+# 
+#     def color ; plant.material[0].basic_color end
+#     def build_color ; plant.material[0].build_color end
+#     # def density ; plant.material[0].solid_density end
+# 
+#     def materials      ; plant.material end
+# 
+#     def food_mat_indexes
+#       Hash[materials.map {|m|
+#         idxs = m.food_mat_index.to_hash.select {|k,v| v != -1 }
+#         [m.id, idxs]
+#       }]
+#     end
+# 
+#     def material_ids   ; materials.map &:id end
+# 
+#     def mill?       ; material_ids.include? 'MILL' end
+#     def drink?      ; material_ids.include? 'DRINK' end
+#     def wood?       ; material_ids.include? 'WOOD' end
+#     def seed?       ; material_ids.include? 'SEED' end
+#     def leaf?       ; material_ids.include? 'LEAF' end
+#     def thread?     ; material_ids.include? 'THREAD' end
+#     def structural? ; material_ids.include? 'STRUCTURAL' end
+# 
+#     def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
+#     def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
+#     def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
+#     def mat_seed       ; material_ids.find {|id| id == 'SEED' } end
+#     def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
+#     def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
+#     def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
+# 
+#     def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+# 
+#     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
+#     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
+#     def edible?         ; edible_cooked? || edible_raw? end
+#     def brewable?       ; material_flags[:ALCOHOL_PLANT] end
+# 
+#     def millable?       ; !!mat_thread end
+# 
+#     def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
+#     def above_ground? ; !subterranean end
+# 
+#     def token ; plant.id end
+#     def to_s ; "#{super} @plant_id=#{id} token=#{token}" end
+# 
+#     attr_reader :plant
+#     def initialize id, link: nil
+#       super id, link: link
+#       @plant = self.class.find_plant id
+#       raise RuntimeError, "Unknown plant id: #{id}" unless plant
+#     end
+#   end
+# 
+#   class Plant < PlantRaw
+#     def initialize *a
+#       super
+#       raise ArgumentError, "Unknown food-plant id: #{id}" unless plant && food_plant?
+#     end
+#   end
+# 
+#   class Seed < PlantRaw
+#     def initialize *a
+#       super
+#       raise ArgumentError, "Unknown seed id: #{id}" unless plant && seed?
+#     end
+#   end
+# 
+#   class Leaf < PlantRaw
+#     def initialize *a
+#       super
+#       raise ArgumentError, "Unknown leaf id: #{id}" unless plant && leaf?
+#     end
+#   end
+# 
+#   # Really "Tree", because the list include non-wood bearing trees.
+#   class Wood < PlantRaw # FIXME rename Tree, call the field wood
+#     def mat_wood ; super || mat_structural end
+#     def density ; mat_wood.solid_density end
+# 
+#     alias wood plant
+#     def initialize *a
+#       super
+#       raise ArgumentError, "Unknown wood id: #{id}" unless wood && tree?
+#     end
+#   end
+# 
+#   class Quality < Thing
+#     def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
+# 
+#     def token ; @quality end
+#     def to_s ; "#{super} @quality_id=#{id} token=#{token}" end
+# 
+#     attr_reader :quality
+#     def initialize id, link: nil
+#       super id, link: link
+#       @quality = self.class.find_quality id
+#       raise RuntimeError, "Unknown quality level: #{id}" unless quality
+#     end
+#   end
+# 
 end
 
 
 module DFStock
   module AnimalMod
     extend Scaffold
-    add_flag(:empty_trags)
+    add_flag(:empty_traps)
     add_flag(:empty_cages)
     add_array(:animals, :enabled) {|idx, link:| Creature.new idx, link: link }
   end
 
   module FoodMod
-    extend Scaffold
-    add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
-    add_array(:meat)                                  {|idx, link:| Meat.new                   idx, link: link }
-    add_array(:fish)                                  {|idx, link:| Fish.new                   idx, link: link }
-    add_array(:unprepared_fish)                       {|idx, link:| UnpreparedFish.new         idx, link: link }
-    add_array(:egg)                                   {|idx, link:| Egg.new                    idx, link: link }
-    add_array(:plants)                                {|idx, link:| Plant.new                  idx, link: link }
-  # add_array(:drink_plant)                           {|idx, link:| DrinkPlant.new             idx, link: link }
-  # add_array(:drink_animal)                          {|idx, link:| DrinkAnimal.new            idx, link: link }
-  # add_array(:cheese_plant)                          {|idx, link:| CheesePlant.new            idx, link: link }
-  # add_array(:cheese_animal)                         {|idx, link:| CheeseAnimal.new           idx, link: link }
-    add_array(:seeds)                                 {|idx, link:| Seed.new                   idx, link: link }
-    add_array(:leaves)                                {|idx, link:| Leaf.new                   idx, link: link }
-  # add_array(:powder_creature)                       {|idx, link:| PowderCreature.new         idx, link: link }
-    add_array(:powder_plant)                          {|idx, link:| PowderPlant.new            idx, link: link }
-  # add_array(:glob)                                  {|idx, link:| Glob.new                   idx, link: link }
-  # add_array(:glob_paste)                            {|idx, link:| GlobPaste.new              idx, link: link }
-  # add_array(:glob_pressed)                          {|idx, link:| GlobPressed.new            idx, link: link }
-  # add_array(:liquid_plant)                          {|idx, link:| LiquidPlant.new            idx, link: link }
-  # add_array(:liquid_animal)                         {|idx, link:| LiquidAnimal.new           idx, link: link }
-  # add_array(:liquid_misc)                           {|idx, link:| LiquidMisc.new             idx, link: link }
+  #   extend Scaffold
+  #   add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
+  #   add_array(:meat)                                  {|idx, link:| Meat.new                   idx, link: link }
+  #   add_array(:fish)                                  {|idx, link:| Fish.new                   idx, link: link }
+  #   add_array(:unprepared_fish)                       {|idx, link:| UnpreparedFish.new         idx, link: link }
+  #   add_array(:egg)                                   {|idx, link:| Egg.new                    idx, link: link }
+  #   add_array(:plants)                                {|idx, link:| Plant.new                  idx, link: link }
+  # # add_array(:drink_plant)                           {|idx, link:| DrinkPlant.new             idx, link: link }
+  # # add_array(:drink_animal)                          {|idx, link:| DrinkAnimal.new            idx, link: link }
+  # # add_array(:cheese_plant)                          {|idx, link:| CheesePlant.new            idx, link: link }
+  # # add_array(:cheese_animal)                         {|idx, link:| CheeseAnimal.new           idx, link: link }
+  #   add_array(:seeds)                                 {|idx, link:| Seed.new                   idx, link: link }
+  #   add_array(:leaves)                                {|idx, link:| Leaf.new                   idx, link: link }
+  # # add_array(:powder_creature)                       {|idx, link:| PowderCreature.new         idx, link: link }
+  #   add_array(:powder_plant)                          {|idx, link:| PowderPlant.new            idx, link: link }
+  # # add_array(:glob)                                  {|idx, link:| Glob.new                   idx, link: link }
+  # # add_array(:glob_paste)                            {|idx, link:| GlobPaste.new              idx, link: link }
+  # # add_array(:glob_pressed)                          {|idx, link:| GlobPressed.new            idx, link: link }
+  # # add_array(:liquid_plant)                          {|idx, link:| LiquidPlant.new            idx, link: link }
+  # # add_array(:liquid_animal)                         {|idx, link:| LiquidAnimal.new           idx, link: link }
+  # # add_array(:liquid_misc)                           {|idx, link:| LiquidMisc.new             idx, link: link }
   end
 
   module FurnitureMod
     extend Scaffold
-    add_array(:type)                                  {|idx, link:| Furniture.new              idx, link: link }
-    add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
-    add_array(:other_materials, :other_mats)          {|idx, link:| OtherFurnitureMaterial.new idx, link: link }
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # add_array(:type)                                  {|idx, link:| Furniture.new              idx, link: link }
+    # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
+    # add_array(:other_materials, :other_mats)          {|idx, link:| OtherFurnitureMaterial.new idx, link: link }
+    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
     # FurnClass has .sand_bag method but it does not appear to function, and is not mapped to type[-1]
     #           does not have a .stone method
   end
 
   module StoneMod
     extend Scaffold
-    add_array(:stones, :mats)                         {|idx, link:| Stone.new                  idx, link: link }
+    add_array(:stones, :mats)                           {|idx, link:| Stone.new                  idx, link: link }
   end
 
   module AmmoMod
@@ -485,7 +558,7 @@ if self.class.const_defined? :DFHack
     def allow_inorganic= b ; settings.allow_inorganic= b end
     def stock_flags        ; settings.flags end
     def animals            ; settings.animals end
-    def food               ; settings.food end
+    # def food               ; settings.food end
     def furniture          ; settings.furniture end
     def corpses            ; settings.corpses end
     def refuse             ; settings.refuse end
@@ -502,6 +575,7 @@ if self.class.const_defined? :DFHack
     def armor              ; settings.armor end
     def sheet              ; settings.sheet end
   end
+
   class DFHack::StockpileSettings
     def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
     def inspect ; "#<#{to_s}>" end
