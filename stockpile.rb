@@ -93,7 +93,7 @@ module DFStock
     def self.find_material_info id, cat ; df::MaterialInfo.new cat, id end
     def self.find_material id, cat = 0 ; find_material_info(cat, id).material end # FIXME How to create the material directly?
 
-    # (34, :fish) -> 
+    # (34, :fish) ->
     def self.find_organic cat_index, cat_name
       cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
       raise "Unknown category '#{cat_name}'" unless cat_num
@@ -137,17 +137,6 @@ module DFStock
     end
   end
 
-  # Organics - each category has a different length
-  # df::MaterialInfo.new cat, id
-  # cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
-  # mat_type  = df.world.raws.mat_table.organic_types[  cat_num][cat_index]
-  
-  # Leather? Into an array of df.world.raws.mat_table.organic_types[Leather] materials - Not sparse
-  # Wood? df.world.raws.plants - Sparse - plant.flags[:tree]
-  #
-  # Stone is a sparse index into an array of 307 df.world.raws.inorganics
-  # What else is into the same array? Metals.
-  #
   class Inorganic < Thing
     include Material
     include Raw
@@ -156,6 +145,13 @@ module DFStock
       df.world.raws.inorganics
     end
 
+    def initialize index, link: nil
+      raise "Can't instantiate the base class" if self.class == Inorganic
+      super
+    end
+  end
+
+  class Stone < Inorganic
     def self.is_ore? inorganic
       inorganic.flags[:METAL_ORE]
     end
@@ -198,12 +194,12 @@ module DFStock
     end
 
     def initialize index, link: nil
-      raise "Can't instantiate the base class" if self.class == Inorganic
+      raise "Can't instantiate the base class" if self.class == Stone
       super
     end
   end
 
-  class Ore < Inorganic
+  class Ore < Stone
     def inorganic_index ; self.class.ore_index_translation_table[ore_index] end
     def to_s ; super + " @ore_index=#{ore_index}" end
 
@@ -214,7 +210,7 @@ module DFStock
     end
   end
 
-  class EconomicStone < Inorganic
+  class EconomicStone < Stone
     def inorganic_index ; self.class.economic_index_translation_table[economic_index] end
     def to_s ; super + " @economic_index=#{economic_index}" end
 
@@ -225,7 +221,7 @@ module DFStock
     end
   end
 
-  class OtherStone < Inorganic
+  class OtherStone < Stone
     def inorganic_index ; self.class.other_index_translation_table[other_index] end
     def to_s ; super + " @other_index=#{other_index}" end
 
@@ -236,7 +232,7 @@ module DFStock
     end
   end
 
-  class Clay < Inorganic
+  class Clay < Stone
     def inorganic_index ; self.class.index_translation_table[clay_index] end
     def to_s ; super + " @clay_index=#{clay_index}" end
 
@@ -273,15 +269,15 @@ module DFStock
   end
 
 #   class Material < Thing
-# 
+#
 #     def stone? ; flags.to_hash[:IS_STONE] end
 #     # def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-# 
+#
 #     def color ; material.color end
-# 
+#
 #     def token ; @material.id end
 #     def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx} token=#{token}" end
-# 
+#
 #     attr_reader :material
 #     def initialize id, link: nil
 #       super id, link: link
@@ -289,29 +285,29 @@ module DFStock
 #       raise RuntimeError, "Unknown material id: #{id}" unless material
 #     end
 #   end
-# 
+#
 #   class Stone < Material
 #     def self.find_stone id ; id end
-# 
+#
 #     def color ; stone.color end
-# 
+#
 #     def token ; @stone.id end
 #     def to_s ; "#{super} @stone_id=#{id} token=#{token}" end
-# 
+#
 #     alias stone material
 #     def initialize id, link: nil
 #       super id, link: link
 #       raise RuntimeError, "Unknown stone id: #{id}" unless stone && stone.stone?
 #     end
 #   end
-# 
-# 
+#
+#
 #   class Metal < Material
 #     def self.find_metal id ; id end
-# 
+#
 #     def token ; @metal end
 #     def to_s ; "#{super} @metal_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :metal
 #     def initialize id, link: nil
 #       super id, link: link
@@ -319,14 +315,14 @@ module DFStock
 #       raise RuntimeError, "Unknown metal id: #{id}" unless metal
 #     end
 #   end
-# 
-# 
+#
+#
 #   class Fish < Thing
 #     def self.find_fish id ; find_organic id, :Fish end
-# 
+#
 #     def token ; @fish end
 #     def to_s ; "#{super} @fish_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :fish
 #     def initialize id, link: nil
 #       super
@@ -334,14 +330,14 @@ module DFStock
 #       raise RuntimeError, "Unknown fish id: #{id}" unless fish
 #     end
 #   end
-# 
-# 
+#
+#
 #   class Meat < Thing
 #     def self.find_meat id ; find_organic id, :Meat end
-# 
+#
 #     def token ; @meat end
 #     def to_s ; "#{super} @meat_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :meat
 #     def initialize id, link: nil
 #       super id, link: link
@@ -349,14 +345,14 @@ module DFStock
 #       raise RuntimeError, "Unknown meat id: #{id}" unless meat
 #     end
 #   end
-# 
-# 
+#
+#
 #   class Furniture < Thing
 #     def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
-# 
+#
 #     def token ; @furniture end
 #     def to_s ; "#{super} @furniture_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :furniture
 #     def initialize id, link: nil
 #       super id, link: link
@@ -364,29 +360,29 @@ module DFStock
 #       raise RuntimeError, "Unknown furniture id: #{id}" unless furniture
 #     end
 #   end
-# 
+#
 #   class PlantRaw < Thing
 #     def self.find_plant id ; df.world.raws.plants.all[id] end
-# 
+#
 #     def flags ; plant.flags end
-# 
+#
 #     def tree? ; flags.to_hash[:TREE] end
-# 
+#
 #     def color ; plant.material[0].basic_color end
 #     def build_color ; plant.material[0].build_color end
 #     # def density ; plant.material[0].solid_density end
-# 
+#
 #     def materials      ; plant.material end
-# 
+#
 #     def food_mat_indexes
 #       Hash[materials.map {|m|
 #         idxs = m.food_mat_index.to_hash.select {|k,v| v != -1 }
 #         [m.id, idxs]
 #       }]
 #     end
-# 
+#
 #     def material_ids   ; materials.map &:id end
-# 
+#
 #     def mill?       ; material_ids.include? 'MILL' end
 #     def drink?      ; material_ids.include? 'DRINK' end
 #     def wood?       ; material_ids.include? 'WOOD' end
@@ -394,7 +390,7 @@ module DFStock
 #     def leaf?       ; material_ids.include? 'LEAF' end
 #     def thread?     ; material_ids.include? 'THREAD' end
 #     def structural? ; material_ids.include? 'STRUCTURAL' end
-# 
+#
 #     def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
 #     def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
 #     def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
@@ -402,22 +398,22 @@ module DFStock
 #     def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
 #     def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
 #     def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
-# 
+#
 #     def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-# 
+#
 #     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
 #     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
 #     def edible?         ; edible_cooked? || edible_raw? end
 #     def brewable?       ; material_flags[:ALCOHOL_PLANT] end
-# 
+#
 #     def millable?       ; !!mat_thread end
-# 
+#
 #     def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
 #     def above_ground? ; !subterranean end
-# 
+#
 #     def token ; plant.id end
 #     def to_s ; "#{super} @plant_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :plant
 #     def initialize id, link: nil
 #       super id, link: link
@@ -425,46 +421,46 @@ module DFStock
 #       raise RuntimeError, "Unknown plant id: #{id}" unless plant
 #     end
 #   end
-# 
+#
 #   class Plant < PlantRaw
 #     def initialize *a
 #       super
 #       raise ArgumentError, "Unknown food-plant id: #{id}" unless plant && food_plant?
 #     end
 #   end
-# 
+#
 #   class Seed < PlantRaw
 #     def initialize *a
 #       super
 #       raise ArgumentError, "Unknown seed id: #{id}" unless plant && seed?
 #     end
 #   end
-# 
+#
 #   class Leaf < PlantRaw
 #     def initialize *a
 #       super
 #       raise ArgumentError, "Unknown leaf id: #{id}" unless plant && leaf?
 #     end
 #   end
-# 
+#
 #   # Really "Tree", because the list include non-wood bearing trees.
 #   class Wood < PlantRaw # FIXME rename Tree, call the field wood
 #     def mat_wood ; super || mat_structural end
 #     def density ; mat_wood.solid_density end
-# 
+#
 #     alias wood plant
 #     def initialize *a
 #       super
 #       raise ArgumentError, "Unknown wood id: #{id}" unless wood && tree?
 #     end
 #   end
-# 
+#
 #   class Quality < Thing
 #     def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
-# 
+#
 #     def token ; @quality end
 #     def to_s ; "#{super} @quality_id=#{id} token=#{token}" end
-# 
+#
 #     attr_reader :quality
 #     def initialize id, link: nil
 #       super id, link: link
@@ -472,7 +468,7 @@ module DFStock
 #       raise RuntimeError, "Unknown quality level: #{id}" unless quality
 #     end
 #   end
-# 
+#
 end
 
 
