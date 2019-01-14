@@ -90,6 +90,9 @@ module DFStock
   end
 
   class Thing
+    include Material
+    include Raw
+
     def self.find_material_info id, cat ; df::MaterialInfo.new cat, id end
     def self.find_material id, cat = 0 ; find_material_info(cat, id).material end # FIXME How to create the material directly?
 
@@ -102,9 +105,9 @@ module DFStock
       # p [:f_o, cat_index, cat_name, cat_num, mat_type, mat_index]
       find_material_info mat_type, mat_index
     end
-    def  enabled? ; link[link_idx] end
-    def  enable   ; link[link_idx] = true  end
-    def disable   ; link[link_idx] = false end
+    def  enabled? ; link[index] end
+    def  enable   ; link[index] = true  end
+    def disable   ; link[index] = false end
     def  toggle   ; set !enabled? end
     def set   x   ; x ? enable : disable end
 
@@ -112,38 +115,39 @@ module DFStock
     def self.cache *name, &b
       name = name.first if name.length == 1
       cache_id ||= [self, name]
-      # p [:cache_, cache_id, @@cache.include?(cache_id)]
       return @@cache[cache_id] if @@cache.include?(cache_id)
-      # p [:cache_, :working]
       @@cache[cache_id] = yield
     end
     def cache *name, &b
       name = name.first if name.length == 1
-      cache_id = [self.class, link_idx, name]
-      # p [:cache, cache_id]
+      cache_id = [self.class, index, name]
       return @@cache[cache_id] if @@cache.include?(cache_id)
       @@cache[cache_id] = yield
     end
 
-    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } @link_idx=#{link_idx}#{" @link=#{link.class}" if link}" end
+    def token ; 'NONE' end
+    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
-    attr_reader :link_idx, :link
-    def initialize link_idx, link: nil
+    attr_reader :index, :link
+    def initialize index, link: nil
       raise "Can't instantiate the base class" if self.class == Thing
-      @link_idx = link_idx # The index into the 'link'ed array for the thing
+      @index = index # The index into the 'link'ed array for the thing
       @link     = link
       @@cache ||= {}
     end
   end
 
   class Inorganic < Thing
-    include Material
-    include Raw
-
     def self.inorganics
       df.world.raws.inorganics
     end
+
+    def self.token index
+      inorganics[index].id
+    end
+
+    def token ; self.class.token index end
 
     def initialize index, link: nil
       raise "Can't instantiate the base class" if self.class == Inorganic
@@ -177,22 +181,6 @@ module DFStock
       !is_clay?(inorganic)
     end
 
-    def self.ore_index_translation_table
-      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_ore? s ; a }
-    end
-
-    def self.economic_index_translation_table
-      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_economic? s ; a }
-    end
-
-    def self.other_index_translation_table
-      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_other? s ; a }
-    end
-
-    def self.index_translation_table
-      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_clay? s ; a }
-    end
-
     def initialize index, link: nil
       raise "Can't instantiate the base class" if self.class == Stone
       super
@@ -200,8 +188,9 @@ module DFStock
   end
 
   class Ore < Stone
-    def inorganic_index ; self.class.ore_index_translation_table[ore_index] end
-    def to_s ; super + " @ore_index=#{ore_index}" end
+    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_ore? s ; a } end
+    def inorganic_index ; self.class.index_translation[ore_index] end
+    def to_s ; super + " ore_index=#{ore_index}" end
 
     attr_reader :ore_index
     def initialize index, link: nil
@@ -211,8 +200,9 @@ module DFStock
   end
 
   class EconomicStone < Stone
-    def inorganic_index ; self.class.economic_index_translation_table[economic_index] end
-    def to_s ; super + " @economic_index=#{economic_index}" end
+    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_economic? s ; a } end
+    def inorganic_index ; self.class.index_translation[economic_index] end
+    def to_s ; super + " economic_index=#{economic_index}" end
 
     attr_reader :economic_index
     def initialize index, link: nil
@@ -222,8 +212,9 @@ module DFStock
   end
 
   class OtherStone < Stone
-    def inorganic_index ; self.class.other_index_translation_table[other_index] end
-    def to_s ; super + " @other_index=#{other_index}" end
+    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_other? s ; a } end
+    def inorganic_index ; self.class.index_translation[other_index] end
+    def to_s ; super + " other_index=#{other_index}" end
 
     attr_reader :other_index
     def initialize index, link: nil
@@ -233,8 +224,9 @@ module DFStock
   end
 
   class Clay < Stone
-    def inorganic_index ; self.class.index_translation_table[clay_index] end
-    def to_s ; super + " @clay_index=#{clay_index}" end
+    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_clay? s ; a } end
+    def inorganic_index ; self.class.index_translation[clay_index] end
+    def to_s ; super + " clay_index=#{clay_index}" end
 
     attr_reader :clay_index
     def initialize index, link: nil
@@ -255,12 +247,12 @@ module DFStock
     def provides_leather? ; cache(:leather) { creature.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     def token ; creature.creature_id end
-    def to_s ; "#{super} @creature_idx=#{creature_idx} @caste_id=#{caste_id} token=#{token}" end
+    def to_s ; "#{super} @creature_idx=#{creature_idx} @caste_id=#{caste_id}" end
 
     attr_reader :caste_id, :creature, :caste
-    def initialize id, link: nil
+    def initialize index, link: nil
       super
-      @creature_idx = link_idx
+      @creature_idx = index
       @caste_id = caste_id || 0
       @creature = self.class.find_creature id
       raise RuntimeError, "Unknown creature idx: #{idx}" unless creature
@@ -276,7 +268,7 @@ module DFStock
 #     def color ; material.color end
 #
 #     def token ; @material.id end
-#     def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx} token=#{token}" end
+#     def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx}" end
 #
 #     attr_reader :material
 #     def initialize id, link: nil
@@ -292,7 +284,7 @@ module DFStock
 #     def color ; stone.color end
 #
 #     def token ; @stone.id end
-#     def to_s ; "#{super} @stone_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @stone_id=#{id}" end
 #
 #     alias stone material
 #     def initialize id, link: nil
@@ -306,7 +298,7 @@ module DFStock
 #     def self.find_metal id ; id end
 #
 #     def token ; @metal end
-#     def to_s ; "#{super} @metal_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @metal_id=#{id}" end
 #
 #     attr_reader :metal
 #     def initialize id, link: nil
@@ -321,7 +313,7 @@ module DFStock
 #     def self.find_fish id ; find_organic id, :Fish end
 #
 #     def token ; @fish end
-#     def to_s ; "#{super} @fish_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @fish_id=#{id}" end
 #
 #     attr_reader :fish
 #     def initialize id, link: nil
@@ -336,7 +328,7 @@ module DFStock
 #     def self.find_meat id ; find_organic id, :Meat end
 #
 #     def token ; @meat end
-#     def to_s ; "#{super} @meat_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @meat_id=#{id}" end
 #
 #     attr_reader :meat
 #     def initialize id, link: nil
@@ -351,7 +343,7 @@ module DFStock
 #     def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
 #
 #     def token ; @furniture end
-#     def to_s ; "#{super} @furniture_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @furniture_id=#{id}" end
 #
 #     attr_reader :furniture
 #     def initialize id, link: nil
@@ -412,7 +404,7 @@ module DFStock
 #     def above_ground? ; !subterranean end
 #
 #     def token ; plant.id end
-#     def to_s ; "#{super} @plant_id=#{id} token=#{token}" end
+#     def to_s ; "#{super} @plant_id=#{id}" end
 #
 #     attr_reader :plant
 #     def initialize id, link: nil
@@ -455,20 +447,20 @@ module DFStock
 #     end
 #   end
 #
-#   class Quality < Thing
-#     def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
-#
-#     def token ; @quality end
-#     def to_s ; "#{super} @quality_id=#{id} token=#{token}" end
-#
-#     attr_reader :quality
-#     def initialize id, link: nil
-#       super id, link: link
-#       @quality = self.class.find_quality id
-#       raise RuntimeError, "Unknown quality level: #{id}" unless quality
-#     end
-#   end
-#
+  class Quality < Thing
+    def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
+
+    def token ; self.class.find_quality quality end
+    def to_s ; "#{super} @quality_id=#{id}" end
+
+    attr_reader :quality
+    def initialize id, link: nil
+      raise RuntimeError, "Unknown quality level: #{id}" unless id
+      @quality = id
+      super id, link: link
+    end
+  end
+
 end
 
 
@@ -509,18 +501,18 @@ module DFStock
     # add_array(:type)                                  {|idx, link:| Furniture.new              idx, link: link }
     # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
     # add_array(:other_materials, :other_mats)          {|idx, link:| OtherFurnitureMaterial.new idx, link: link }
-    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
     # FurnClass has .sand_bag method but it does not appear to function, and is not mapped to type[-1]
     #           does not have a .stone method
   end
 
   module StoneMod
     extend Scaffold
-    add_array(:ore, :mats)                              {|idx, link:| Ore.new                    idx, link: link }
+    add_array(:ore,      :mats)                         {|idx, link:| Ore.new                    idx, link: link }
     add_array(:economic, :mats)                         {|idx, link:| Economic.new               idx, link: link }
-    add_array(:other, :mats)                            {|idx, link:| OtherStone.new             idx, link: link }
-    add_array(:clay, :mats)                             {|idx, link:| Clay.new                   idx, link: link }
+    add_array(:other,    :mats)                         {|idx, link:| OtherStone.new             idx, link: link }
+    add_array(:clay,     :mats)                         {|idx, link:| Clay.new                   idx, link: link }
   end
 
   module AmmoMod
@@ -528,8 +520,8 @@ module DFStock
     # add_array(:type)                                  {|idx, link:| Sheet.new                  idx, link: link }
     # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
     # add_array(:other_materials, :other_mats)          {|idx, link:| OtherAmmoMaterial.new      idx, link: link }
-    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
   end
 
   module CoinMod
@@ -552,8 +544,11 @@ module DFStock
 
   module FinishedGoodsMod
     extend Scaffold
-    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # mats # stone/clay, metal, gem
+    # other_mats
+    # type
+    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
   end
 
   module LeatherMod
@@ -582,16 +577,28 @@ module DFStock
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # trapcomp_type
+    # weapon_type
+    # mats # stone + metal
+    # other_mats
+    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
   end
 
   module ArmorMod
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    # add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    # add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # body
+    # feet
+    # hands
+    # head
+    # legs
+    # shield
+    # mats
+    # other_mats
+    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
+    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
   end
 
   module SheetMod
