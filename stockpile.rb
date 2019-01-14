@@ -74,7 +74,7 @@ end
 # A Stock 'Thing' is a bit conceptual, as I'm modelling quality levels that way as well as items
 # mostly though, things are a plant, or are made of a plant material, for example. One is a plant raw, the other a plant material.
 # A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
-# As such, material questions about a conceptual strawberry plant are necessarily a bit vague.
+# As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 module DFStock
   module Raw
     def raw_mod ; end
@@ -137,43 +137,113 @@ module DFStock
     end
   end
 
-  class SomeThing < Thing
-    def material ; raw.material end
-    include PlantMaterial
-  end
-
-  class Stone < Thing
+  # Organics - each category has a different length
+  # df::MaterialInfo.new cat, id
+  # cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
+  # mat_type  = df.world.raws.mat_table.organic_types[  cat_num][cat_index]
+  
+  # Leather? Into an array of df.world.raws.mat_table.organic_types[Leather] materials - Not sparse
+  # Wood? df.world.raws.plants - Sparse - plant.flags[:tree]
+  #
+  # Stone is a sparse index into an array of 307 df.world.raws.inorganics
+  # What else is into the same array? Metals.
+  #
+  class Inorganic < Thing
     include Material
     include Raw
 
-    def stone_idx ; link_idx end
-    def initialize idx
+    def self.inorganics
+      df.world.raws.inorganics
+    end
+
+    def self.is_ore? inorganic
+      inorganic.flags[:METAL_ORE]
+    end
+
+    def self.is_economic? inorganic
+      !inorganic.economic_uses.empty? &&
+      !inorganic.flags[:METAL_ORE] &&
+      !inorganic.flags[:SOIL] &&
+      !inorganic.material.flags[:IS_METAL]
+    end
+
+    def self.is_clay? inorganic
+       inorganic.id =~ /clay/i &&
+      !inorganic.flags[:AQUIFER] &&
+      !inorganic.material.flags[:IS_STONE]
+    end
+
+    def self.is_other? inorganic
+       inorganic.material.flags[:IS_STONE] &&
+      !inorganic.material.flags[:NO_STONE_STOCKPILE] &&
+      !is_ore?(inorganic) &&
+      !is_economic?(inorganic) &&
+      !is_clay?(inorganic)
+    end
+
+    def self.ore_index_translation_table
+      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_ore? s ; a }
+    end
+
+    def self.economic_index_translation_table
+      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_economic? s ; a }
+    end
+
+    def self.other_index_translation_table
+      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_other? s ; a }
+    end
+
+    def self.index_translation_table
+      @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_clay? s ; a }
+    end
+
+    def initialize index, link: nil
+      raise "Can't instantiate the base class" if self.class == Inorganic
       super
     end
   end
 
-  class Ore < Stone
-    #private
-    def build_idx_translation_table
-      return Hash.new(1) # FIXME
+  class Ore < Inorganic
+    def inorganic_index ; self.class.ore_index_translation_table[ore_index] end
+    def to_s ; super + " @ore_index=#{ore_index}" end
 
-      table = {}
-      count = 0
-      stones.each_with_index {|s,i| table[count] = i if s.is_ore? }
+    attr_reader :ore_index
+    def initialize index, link: nil
+      @ore_index = index
+      super inorganic_index, link: link
     end
+  end
 
-    def ore_idx_to_stone_idx ore_idx
-      (@translation ||= build_idx_translation_table)[ore_idx]
+  class EconomicStone < Inorganic
+    def inorganic_index ; self.class.economic_index_translation_table[economic_index] end
+    def to_s ; super + " @economic_index=#{economic_index}" end
+
+    attr_reader :economic_index
+    def initialize index, link: nil
+      @economic_index = index
+      super inorganic_index, link: link
     end
+  end
 
-    #public
+  class OtherStone < Inorganic
+    def inorganic_index ; self.class.other_index_translation_table[other_index] end
+    def to_s ; super + " @other_index=#{other_index}" end
 
-    attr_reader :ore_idx
+    attr_reader :other_index
+    def initialize index, link: nil
+      @other_index = index
+      super inorganic_index, link: link
+    end
+  end
 
-    # The goal is to refer to ore[0] instead of stones[?], so ore[0] needs a stone index
-    def initialize idx
-      @ore_idx = idx
-      super ore_idx_to_stone_idx ore_idx
+  class Clay < Inorganic
+    def inorganic_index ; self.class.index_translation_table[clay_index] end
+    def to_s ; super + " @clay_index=#{clay_index}" end
+
+    attr_reader :clay_index
+    def initialize index, link: nil
+      @clay_index = index
+      super inorganic_index, link: link
     end
   end
 
@@ -451,7 +521,10 @@ module DFStock
 
   module StoneMod
     extend Scaffold
-    add_array(:stones, :mats)                           {|idx, link:| Stone.new                  idx, link: link }
+    add_array(:ore, :mats)                              {|idx, link:| Ore.new                    idx, link: link }
+    add_array(:economic, :mats)                         {|idx, link:| Economic.new               idx, link: link }
+    add_array(:other, :mats)                            {|idx, link:| OtherStone.new             idx, link: link }
+    add_array(:clay, :mats)                             {|idx, link:| Clay.new                   idx, link: link }
   end
 
   module AmmoMod
