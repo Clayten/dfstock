@@ -26,39 +26,29 @@ module DFStock
     # This runs slightly later, at inclusion
     def included klass
       p [:included, self, klass, :features, @features.length]
-      # @features.each {|f| p f }
 
       @features.each {|type, desired_name, actual_name, initializer|
         if :flag == type
           next if desired_name == actual_name # no-op
-          # p [:aliasing, desired_name, :for, klass]
           klass.class_eval "alias #{desired_name} #{actual_name}" unless klass.method_defined?(desired_name)
         elsif :array == type
-          # p [:add_array, desired_name, actual_name]
           if desired_name == actual_name
             original_name = "original_#{desired_name}"
-            # p [:checking, original_name]
             if !method_defined? original_name
-              # p [:aliasing, original_name, :for, klass]
               klass.class_eval "alias #{original_name} #{actual_name}" unless klass.method_defined?(original_name)
-              # p [:undef_method, actual_name, :on, klass]
               klass.class_eval { undef_method actual_name }
             end
           end
 
-          # p [:define_methods, desired_name, klass]
+          flags_array_name = original_name || actual_name
+          p [:indexes, klass.index_translation.length, klass.index_translation]
           klass.send(:define_method, desired_name) {|&b|
-            # p [:array_method, desired_name, (original_name || actual_name)]
-            @count ||= 0
-            send(original_name || actual_name).each_with_index.map {|v,idx|
-              @count += 1
-              # raise if @count > 5
-              link = send(original_name || actual_name)
-              # p [:index, idx, :link, link.class]
-              # p caller
+            flags_array = send flags_array_name
+            flags_array.each_with_index.map {|v,idx|
               obj = begin
-                instance_exec(idx, link: link, &initializer)
+                instance_exec(idx, link: flags_array, &initializer)
               rescue ArgumentError
+                p [:Rescued, idx]
                 next
               end
             }.compact
@@ -105,11 +95,11 @@ module DFStock
       # p [:f_o, cat_index, cat_name, cat_num, mat_type, mat_index]
       find_material_info mat_type, mat_index
     end
-    def  enabled? ; link[index] end
-    def  enable   ; link[index] = true  end
-    def disable   ; link[index] = false end
-    def  toggle   ; set !enabled? end
-    def set   x   ; x ? enable : disable end
+    def  enabled? ; raise unless link ; link[index] end
+    def  enable   ; raise unless link ; link[index] = true  end
+    def disable   ; raise unless link ; link[index] = false end
+    def  toggle   ; raise unless link ; set !enabled? end
+    def set   x   ; raise unless link ; x ? enable : disable end
 
     # Cache lookups - this is pretty important for performance
     def self.cache *name, &b
@@ -126,13 +116,15 @@ module DFStock
     end
 
     def token ; 'NONE' end
-    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
+    # def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
     attr_reader :index, :link
     def initialize index, link: nil
-      raise "Can't instantiate the base class" if self.class == Thing
+      p [:initialize_thing, index, link.class]
       @index = index # The index into the 'link'ed array for the thing
+      raise "No index provided" unless index
       @link     = link
       @@cache ||= {}
     end
@@ -147,15 +139,33 @@ module DFStock
       inorganics[index].id
     end
 
+    def raw ; self.class.inorganics[index] end
+
+    def material ; raw.material end
+
     def token ; self.class.token index end
 
     def initialize index, link: nil
-      raise "Can't instantiate the base class" if self.class == Inorganic
       super
     end
   end
 
+  class Metal < Inorganic
+    def self.index_translation ; table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_metal? s ; a } end
+
+    def self.is_metal? inorganic
+      inorganic.material.flags[:IS_METAL]
+    end
+
+    def initialize index, link: nil
+      super
+    end
+  end
+
+
   class Stone < Inorganic
+    def self.index_translation ; @table ||= ObjectSpace.each_object.select {|x| next unless x.is_a? Class ; x < self }.map(&:index_translation).flatten.sort end
+
     def self.is_ore? inorganic
       inorganic.flags[:METAL_ORE]
     end
@@ -182,7 +192,7 @@ module DFStock
     end
 
     def initialize index, link: nil
-      raise "Can't instantiate the base class" if self.class == Stone
+      # @stone_index = index ... FIXME - Anchor Clay/etc in Stone, and Stone in Inorganic, or Clay directly in Inorganic?
       super
     end
   end
@@ -518,7 +528,7 @@ module DFStock
   module AmmoMod
     extend Scaffold
     # add_array(:type)                                  {|idx, link:| Sheet.new                  idx, link: link }
-    # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
+    add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
     # add_array(:other_materials, :other_mats)          {|idx, link:| OtherAmmoMaterial.new      idx, link: link }
     add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
     add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
@@ -526,6 +536,7 @@ module DFStock
 
   module CoinMod
     extend Scaffold
+    # FIXME Not metals - many more materials
     # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
   end
 
