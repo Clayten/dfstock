@@ -7,18 +7,18 @@ module DFStock
     end
 
     # This runs during class-definition at load-time
-    def add_array desired_name, actual_name = desired_name, &initializer
-      desired_name, actual_name = desired_name.to_sym, actual_name.to_sym
-      array = [:array, desired_name, actual_name, initializer]
+    def add_array stockklass, desired_name, actual_name = desired_name
+      desired_name, actual_name = desired_name.to_sym, actual_name
+      array = [:array, desired_name, actual_name, stockklass]
       # p [:add_array, array]
-      @features.delete_if {|kl, dn, an, _| self == kl && desired_name == dn && actual_name == an }
+      @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an && stockklass = sk }
       @features.push(array)
       desired_name
     end
 
     def add_flag desired_name, actual_name = desired_name
       flag = [:flag, desired_name, actual_name]
-      @features.delete_if {|kl, dn, an| self == kl && desired_name == dn && actual_name == an }
+      @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an }
       @features.push(flag)
       desired_name
     end
@@ -27,7 +27,10 @@ module DFStock
     def included klass
       p [:included, self, klass, :features, @features.length]
 
-      @features.each {|type, desired_name, actual_name, initializer|
+      # FIXME Change add method to take class as an argument, not hidden in a block
+      # then query the class's index_translation table for size, rather than the
+      # base array of flags.
+      @features.each {|type, desired_name, actual_name, stockklass|
         if :flag == type
           next if desired_name == actual_name # no-op
           klass.class_eval "alias #{desired_name} #{actual_name}" unless klass.method_defined?(desired_name)
@@ -41,18 +44,19 @@ module DFStock
           end
 
           flags_array_name = original_name || actual_name
-          p [:indexes, klass.index_translation.length, klass.index_translation]
+          # p [:stockklass, stockklass, (stockklass.index_translation if stockklass.respond_to?(:index_translation))]
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
-            flags_array.each_with_index.map {|v,idx|
+            list = stockklass.respond_to?(:index_translation) ? stockklass.index_translation : (0...stockklass.link.length)
+            stockklass.index_translation.each_with_index.map {|v,idx|
               obj = begin
-                instance_exec(idx, link: flags_array, &initializer)
+                stockklass.new idx, link: flags_array
               rescue ArgumentError
                 p [:Rescued, idx]
                 next
               end
             }.compact
-          } if :array == type
+          }
         else
           raise "Unknown type #{type}"
         end
@@ -122,7 +126,6 @@ module DFStock
 
     attr_reader :index, :link
     def initialize index, link: nil
-      p [:initialize_thing, index, link.class]
       @index = index # The index into the 'link'ed array for the thing
       raise "No index provided" unless index
       @link     = link
@@ -157,11 +160,15 @@ module DFStock
       inorganic.material.flags[:IS_METAL]
     end
 
+    def inorganic_index ; self.class.index_translation[metal_index] end
+    def to_s ; super + " metal_index=#{metal_index}" end
+
+    attr_reader :metal_index
     def initialize index, link: nil
-      super
+      @metal_index = index
+      super inorganic_index, link: link
     end
   end
-
 
   class Stone < Inorganic
     def self.index_translation ; @table ||= ObjectSpace.each_object.select {|x| next unless x.is_a? Class ; x < self }.map(&:index_translation).flatten.sort end
@@ -192,7 +199,6 @@ module DFStock
     end
 
     def initialize index, link: nil
-      # @stone_index = index ... FIXME - Anchor Clay/etc in Stone, and Stone in Inorganic, or Clay directly in Inorganic?
       super
     end
   end
@@ -458,99 +464,100 @@ module DFStock
 #   end
 #
   class Quality < Thing
+    def self.index_translation ; (0 ... DFHack::ItemQuality::ENUM.length) end
     def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
 
-    def token ; self.class.find_quality quality end
-    def to_s ; "#{super} @quality_id=#{id}" end
+    def token ; self.class.find_quality quality_index end
+    def to_s ; "#{super} @quality_index=#{index}" end
 
-    attr_reader :quality
-    def initialize id, link: nil
-      raise RuntimeError, "Unknown quality level: #{id}" unless id
-      @quality = id
-      super id, link: link
+    attr_reader :quality_index
+    def initialize index, link: nil
+      @quality_index = index
+      super index, link: link
+      # raise RuntimeError, "Unknown quality level: #{id}" unless quality
     end
   end
 
 end
-
 
 module DFStock
   module AnimalMod
     extend Scaffold
     add_flag(:empty_traps)
     add_flag(:empty_cages)
-    add_array(:animals, :enabled) {|idx, link:| Creature.new idx, link: link }
+    add_array(Creature, :animals, :enabled)
   end
 
   module FoodMod
   #   extend Scaffold
   #   add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
-  #   add_array(:meat)                                  {|idx, link:| Meat.new                   idx, link: link }
-  #   add_array(:fish)                                  {|idx, link:| Fish.new                   idx, link: link }
-  #   add_array(:unprepared_fish)                       {|idx, link:| UnpreparedFish.new         idx, link: link }
-  #   add_array(:egg)                                   {|idx, link:| Egg.new                    idx, link: link }
-  #   add_array(:plants)                                {|idx, link:| Plant.new                  idx, link: link }
-  # # add_array(:drink_plant)                           {|idx, link:| DrinkPlant.new             idx, link: link }
-  # # add_array(:drink_animal)                          {|idx, link:| DrinkAnimal.new            idx, link: link }
-  # # add_array(:cheese_plant)                          {|idx, link:| CheesePlant.new            idx, link: link }
-  # # add_array(:cheese_animal)                         {|idx, link:| CheeseAnimal.new           idx, link: link }
-  #   add_array(:seeds)                                 {|idx, link:| Seed.new                   idx, link: link }
-  #   add_array(:leaves)                                {|idx, link:| Leaf.new                   idx, link: link }
-  # # add_array(:powder_creature)                       {|idx, link:| PowderCreature.new         idx, link: link }
-  #   add_array(:powder_plant)                          {|idx, link:| PowderPlant.new            idx, link: link }
-  # # add_array(:glob)                                  {|idx, link:| Glob.new                   idx, link: link }
-  # # add_array(:glob_paste)                            {|idx, link:| GlobPaste.new              idx, link: link }
-  # # add_array(:glob_pressed)                          {|idx, link:| GlobPressed.new            idx, link: link }
-  # # add_array(:liquid_plant)                          {|idx, link:| LiquidPlant.new            idx, link: link }
-  # # add_array(:liquid_animal)                         {|idx, link:| LiquidAnimal.new           idx, link: link }
-  # # add_array(:liquid_misc)                           {|idx, link:| LiquidMisc.new             idx, link: link }
+  #   add_array(Meat, :meat)
+  #   add_array(Fish, :fish)
+  #   add_array(UnpreparedFish, :unprepared_fish)
+  #   add_array(Egg, :egg)
+  #   add_array(Plant, :plants)
+  # # add_array(DrinkPlant, :drink_plant)
+  # # add_array(DrinkAnimal, :drink_animal)
+  # # add_array(CheesePlant, :cheese_plant)
+  # # add_array(CheeseAnimal, :cheese_animal)
+  #   add_array(Seed, :seeds)
+  #   add_array(Leaf, :leaves)
+  # # add_array(PowderCreature, :powder_creature)
+  #   add_array(PowderPlant, :powder_plant)
+  # # add_array(Glob, :glob)
+  # # add_array(GlobPaste, :glob_paste)
+  # # add_array(GlobPressed, :glob_pressed)
+  # # add_array(LiquidPlant, :liquid_plant)
+  # # add_array(LiquidAnimal, :liquid_animal)
+  # # add_array(LiquidMisc, :liquid_misc)
   end
 
   module FurnitureMod
     extend Scaffold
-    # add_array(:type)                                  {|idx, link:| Furniture.new              idx, link: link }
-    # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
-    # add_array(:other_materials, :other_mats)          {|idx, link:| OtherFurnitureMaterial.new idx, link: link }
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # add_array(Furniture, :type)
+    add_array(Metal, :metals, :mats)
+    # add_array(OtherFurnitureMaterial, :other_materials, :other_mats)
+    add_array(Quality, :quality_core)
+    add_array(Quality, :quality_total)
     # FurnClass has .sand_bag method but it does not appear to function, and is not mapped to type[-1]
     #           does not have a .stone method
   end
 
   module StoneMod
     extend Scaffold
-    add_array(:ore,      :mats)                         {|idx, link:| Ore.new                    idx, link: link }
-    add_array(:economic, :mats)                         {|idx, link:| Economic.new               idx, link: link }
-    add_array(:other,    :mats)                         {|idx, link:| OtherStone.new             idx, link: link }
-    add_array(:clay,     :mats)                         {|idx, link:| Clay.new                   idx, link: link }
+    add_array(Ore, :ore, :mats)
+    add_array(EconomicStone, :economic, :mats)
+    add_array(OtherStone, :other, :mats)
+    add_array(Clay, :clay, :mats)
   end
 
   module AmmoMod
     extend Scaffold
-    # add_array(:type)                                  {|idx, link:| Sheet.new                  idx, link: link }
-    add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
-    # add_array(:other_materials, :other_mats)          {|idx, link:| OtherAmmoMaterial.new      idx, link: link }
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    # add_array(Sheet, :type)
+    add_array(Metal, :metals, :mats)
+    # add_array(OtherAmmoMaterial, :other_materials, :other_mats)
+    add_array(Quality, :quality_core)
+    add_array(Quality, :quality_total)
   end
 
   module CoinMod
     extend Scaffold
     # FIXME Not metals - many more materials
-    # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
+    # add_array(Metal, :metals, :mats)
   end
 
   module BarsBlocksMod
     extend Scaffold
-    # add_array(:metals, :mats)                         {|idx, link:| Metal.new                  idx, link: link }
+    add_array(Metal, :bars_metals, :bars_mats)
+    add_array(Metal, :blocks_metals, :blocks_mats)
   end
 
   module GemsMod
     extend Scaffold
-    # add_array(:rough_gems,       :rough_mats)         {|idx, link:| RoughGems.new              idx, link: link }
-    # add_array(:cut_gems,         :cut_mats)           {|idx, link:| CutGems.new                idx, link: link }
-    # add_array(:rough_other_gems, :rough_other_mats)   {|idx, link:| RoughOtherGems.new         idx, link: link }
-    # add_array(:cut_other_gems,   :cut_other_mats)     {|idx, link:| CutOtherGems.new           idx, link: link }
+    # add_array(RoughGems, :rough_gems, :rough_mats)
+    # add_array(CutGems, :cut_gems, :cut_mats)
+    # add_array(RoughOtherGems, :rough_other_gems, :rough_other_mats)
+    # add_array(CutOtherGems, :cut_other_gems, :cut_other_mats)
   end
 
   module FinishedGoodsMod
@@ -558,30 +565,31 @@ module DFStock
     # mats # stone/clay, metal, gem
     # other_mats
     # type
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    add_array(Metal, :metals, :mats)
+    add_array(Quality, :quality_core)
+    add_array(Quality, :quality_total)
   end
 
   module LeatherMod
     extend Scaffold
-    # add_array(:leather, :mats)                        {|idx, link:| Leather.new                idx, link: link }
+    # add_array(Leather, :leather, :mats)
   end
 
   module ClothMod
     extend Scaffold
-    # add_array(:thread_silk)                           {|idx, link:| ThreadSilk.new             idx, link: link }
-    # add_array(:thread_plant)                          {|idx, link:| ThreadPlant.new            idx, link: link }
-    # add_array(:thread_yarn)                           {|idx, link:| ThreadYarn.new             idx, link: link }
-    # add_array(:thread_metal)                          {|idx, link:| ThreadMetal.new            idx, link: link }
-    # add_array(:cloth_silk)                            {|idx, link:| ClothSilk.new              idx, link: link }
-    # add_array(:cloth_plant)                           {|idx, link:| ClothPlant.new             idx, link: link }
-    # add_array(:cloth_yarn)                            {|idx, link:| ClothYarn.new              idx, link: link }
-    # add_array(:cloth_metal)                           {|idx, link:| ClothMetal.new             idx, link: link }
+    # add_array(ThreadSilk, :thread_silk)
+    # add_array(ThreadPlant, :thread_plant)
+    # add_array(ThreadYarn, :thread_yarn)
+    # add_array(ThreadMetal, :thread_metal)
+    # add_array(ClothSilk, :cloth_silk)
+    # add_array(ClothPlant, :cloth_plant)
+    # add_array(ClothYarn, :cloth_yarn)
+    # add_array(ClothMetal, :cloth_metal)
   end
 
   module WoodMod
     extend Scaffold
-    add_array(:wood, :mats)                           {|idx, link:| Wood.new                   idx, link: link }
+    # add_array(Wood, :wood, :mats)
   end
 
   module WeaponsMod
@@ -592,8 +600,9 @@ module DFStock
     # weapon_type
     # mats # stone + metal
     # other_mats
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    add_array(Metal, :metals, :mats)
+    add_array(Quality, :quality_core)
+    add_array(Quality, :quality_total)
   end
 
   module ArmorMod
@@ -608,14 +617,15 @@ module DFStock
     # shield
     # mats
     # other_mats
-    add_array(:quality_core)                          {|idx, link:| Quality.new                idx, link: link }
-    add_array(:quality_total)                         {|idx, link:| Quality.new                idx, link: link }
+    add_array(Metal, :metals, :mats)
+    add_array(Quality, :quality_core)
+    add_array(Quality, :quality_total)
   end
 
   module SheetMod
     extend Scaffold
-    # add_array(:paper)                                 {|idx, link:| Paper.new                  idx, link: link }
-    # add_array(:parchment)                             {|idx, link:| Parchment.new              idx, link: link }
+    # add_array(Paper, :paper)
+    # add_array(Parchment, :parchment)
   end
 
 end
