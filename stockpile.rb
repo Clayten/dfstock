@@ -101,6 +101,7 @@ module DFStock
     def set   x   ; raise unless link ; x ? enable : disable end
 
     # Cache lookups - this is pretty important for performance
+    @@cache = {} unless class_variables.include? :@@cache
     def self.cache *name, &b
       name = name.first if name.length == 1
       cache_id ||= [self, name]
@@ -252,9 +253,14 @@ module DFStock
     def self.creatures ; cache([:creature]) { df.world.raws.creatures.all } end
     def self.find_creature id ; creatures[id] end
 
+    def self.get_creatures_index c ; cache([:creature_index, c]) { creatures.index c } end
+
     def self.is_creature? c
+      index = get_creatures_index c
       # !c.flags[:DOES_NOT_EXIST] &&
-      !c.flags[:EQUIPMENT_WAGON]
+      !c.flags[:EQUIPMENT_WAGON] &&
+      (index <= 765 ||
+       index >= 900)
     end
     def self.index_translation ; table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
     def creatures_index ; self.class.index_translation[creature_index] end
