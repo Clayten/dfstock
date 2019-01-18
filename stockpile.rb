@@ -47,15 +47,10 @@ module DFStock
           # p [:stockklass, stockklass, (stockklass.index_translation if stockklass.respond_to?(:index_translation))]
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
-            list = stockklass.respond_to?(:index_translation) ? stockklass.index_translation : (0...stockklass.link.length)
-            stockklass.index_translation.each_with_index.map {|v,idx|
-              obj = begin
-                stockklass.new idx, link: flags_array
-              rescue ArgumentError
-                p [:Rescued, idx]
-                next
-              end
-            }.compact
+            list = stockklass.index_translation
+            list.each_with_index.map {|_, idx|
+              stockklass.new idx, link: flags_array
+            }
           }
         else
           raise "Unknown type #{type}"
@@ -121,7 +116,7 @@ module DFStock
 
     def token ; 'NONE' end
     # def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
-    def to_s ; "#{self.class.name} linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{!!link}#{" enabled=#{!!enabled?}" if link} token=#{token} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
     attr_reader :index, :link
@@ -254,7 +249,15 @@ module DFStock
   # food/fish[0] = Cuttlefish(F) = raws.creatures.all[446 = raws.mat_table.organic_indexes[1 = :Fish][0]]
 
   class Creature < Thing
-    def self.find_creature id ; cache(:creature, id) { df.world.raws.creatures.all[id] } end
+    def self.creatures ; cache([:creature]) { df.world.raws.creatures.all } end
+    def self.find_creature id ; creatures[id] end
+
+    def self.is_creature? c
+      # !c.flags[:DOES_NOT_EXIST] &&
+      !c.flags[:EQUIPMENT_WAGON]
+    end
+    def self.index_translation ; table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
+    def creatures_index ; self.class.index_translation[creature_index] end
 
     def edible?           ; true end # What won't they eat? Lol! FIXME?
     def lays_eggs?        ; cache(:eggs   ) { creature.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
@@ -263,16 +266,18 @@ module DFStock
     def provides_leather? ; cache(:leather) { creature.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     def token ; creature.creature_id end
-    def to_s ; "#{super} @creature_idx=#{creature_idx} @caste_id=#{caste_id}" end
+    def to_s ; "#{super} creature_index=#{creature_index}" end
 
-    attr_reader :caste_id, :creature, :caste
+    def flags ; creature.flags end
+
+    def creature ; self.class.find_creature index end
+    def caste_id ; @caste_id ||= 0 end
+    def caste ; creature.caste[caste_id] end
+
+    attr_reader :creature_index
     def initialize index, link: nil
-      super
-      @creature_idx = index
-      @caste_id = caste_id || 0
-      @creature = self.class.find_creature id
-      raise RuntimeError, "Unknown creature idx: #{idx}" unless creature
-      @caste    = creature.caste[caste_id]
+      @creature_index = index
+      super creatures_index, link: link
     end
   end
 
