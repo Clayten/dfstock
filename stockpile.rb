@@ -253,16 +253,12 @@ module DFStock
     def self.creatures ; cache([:creature]) { df.world.raws.creatures.all } end
     def self.find_creature id ; creatures[id] end
 
-    def self.get_creatures_index c ; cache([:creature_index, c]) { creatures.index c } end
-
     def self.is_creature? c
-      index = get_creatures_index c
-      # !c.flags[:DOES_NOT_EXIST] &&
       !c.flags[:EQUIPMENT_WAGON] &&
-      (index <= 765 ||
-       index >= 900)
+       c.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/
     end
-    def self.index_translation ; table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
+    def self.reset_index ; @table = nil end
+    def self.index_translation ; @table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
     def creatures_index ; self.class.index_translation[creature_index] end
 
     def edible?           ; true end # What won't they eat? Lol! FIXME?
@@ -272,7 +268,7 @@ module DFStock
     def provides_leather? ; cache(:leather) { creature.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     def token ; creature.creature_id end
-    def to_s ; "#{super} creature_index=#{creature_index}" end
+    # def to_s ; "#{super} creature_index=#{creature_index}" end
 
     def flags ; creature.flags end
 
