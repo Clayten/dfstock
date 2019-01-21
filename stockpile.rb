@@ -143,6 +143,7 @@ module DFStock
       return @@cache[cache_id] if @@cache.include?(cache_id)
       @@cache[cache_id] = yield
     end
+    def self.clear_cache ; @@cache = {} end
 
     def token ; 'NONE' end
     # def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
@@ -285,6 +286,8 @@ module DFStock
 
   # food/fish[0] = Cuttlefish(F) = raws.creatures.all[446 = raws.mat_table.organic_indexes[1 = :Fish][0]]
 
+  # NOTE: Not all creatures are stockpilable, and not everything in the array is a creature
+  # TODO: Derive Animals from this, and use this then non-sparse class to parent eggs.
   class Creature < Thing
     def self.creatures ; cache([:creature]) { df.world.raws.creatures.all } end
     def self.find_creature id ; creatures[id] end
@@ -293,8 +296,9 @@ module DFStock
       !c.flags[:EQUIPMENT_WAGON] &&
        c.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/
     end
-    def self.index_translation ; @table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
-    def creatures_index ; self.class.index_translation[creature_index] end
+    def self.creatures_indexes ; cache(:creatures) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } } end
+    def self.index_translation ; creatures_index end
+    def creatures_index ; self.class.creatures_indexes[creature_index] end
 
     def edible?           ; true end # What won't they eat? Lol! FIXME?
     def lays_eggs?        ; cache(:eggs   ) { creature.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
@@ -307,7 +311,7 @@ module DFStock
 
     def flags ; creature.flags end
 
-    def creature ; self.class.find_creature index end
+    def creature ; self.class.find_creature creature_index end
     def caste_id ; @caste_id ||= 0 end
     def caste ; creature.caste[caste_id] end
 
@@ -315,6 +319,27 @@ module DFStock
     def initialize index, link: nil
       @creature_index = index
       super creatures_index, link: link
+    end
+  end
+
+  class Egg < Creature
+    def self.egg_category ; DFHack::OrganicMatCategory::NUME[:Eggs] end
+    def self.egg_types ; df.world.raws.mat_table.organic_types[DFHack::OrganicMatCategory::NUME[:Eggs]] end
+    def self.egg_indexes ; (0 ... egg_types.length).to_a end
+    def self.index_translation ; egg_indexes end
+
+    def creature_index ; self.class.egg_types[egg_index] end
+    def creature ; self.class.creatures[self.class.egg_types[egg_index]] end
+
+    def to_s ; super + " egg_index=#{egg_index}" end
+    def token ; creature.caste.first.caste_name.first end
+
+    attr_reader :egg_index
+    def index ; egg_index end
+    def initialize index, link: nil
+      @egg_index = index
+      super creature_index, link: link # Passthrough
+      @index = egg_index
     end
   end
 
@@ -326,12 +351,26 @@ module DFStock
     def self.plants ; plant_indexes.map {|i| Plant.new i } end
 
     def self.plantproduct_indexes ; cache(:plantproduct) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_product? ; a } } end
-    def self.fruitleaf_indexes    ; cache(:fruitleaf)    { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_fruit? || x.has_leaf? ; a } } end
+    def self.seed_indexes         ; cache(:seeds)        { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.has_seed? ; a } } end
     def self.tree_indexes         ; cache(:trees)        { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
 
-    def has_product? plant ; end # Food/plants
-    def has_fruit? plant ; end # Food/plants
-    def has_leaf? plant ; end # Food/plants
+    def growths ; raw.growths end
+    def growth_ids ; growths.map(&:id) end
+
+    def has_product? ; end
+    def has_seed?  ; material_ids.include? 'SEED' end
+    def has_fruit? ; growth_ids.include? 'FRUIT' end
+    def has_bud?   ; growth_ids.include? 'BUD' end
+    def has_leaf?  ; growth_ids.include? 'LEAVES' end
+
+
+    def fruitleaf_growths ; growths.select {|g| df::MaterialInfo.new(g.mat_type, g.mat_index).material.food_mat_index[:Leaf] != -1 } end
+    def self.fruitleaf_growths
+      cache(:fruitleaf_growths) { plants.map {|pl| pl.fruitleaf_growths }.flatten.sort_by {|g| m = M g.mat_type, g.mat_index ; m.food_mat_index[:Leaf] } }
+    end
+    def fruitleaf_growth_ids
+      fruitleaf_growths.map(&:id)
+    end
 
     def plant ; self.class.plant_raws[plant_index] end
 
@@ -342,7 +381,7 @@ module DFStock
     def materials ; plant.material end
 
     attr_reader :plant_index
-    def initialize index, link: link
+    def initialize index, link: nil
       @plant_index = index
       super index, link: link
     end
@@ -354,36 +393,55 @@ module DFStock
     def to_s ; super + " plantproduct_index=#{plantproduct_index}" end
 
     attr_reader :plantproduct_index
-    def initialize index, link: link
+    def initialize index, link: nil
       @plantproduct_index = index
       super plant_index, link: link
     end
   end
 
-  # class X < Y # Template
-  #   def Y_index ; self.class.X_indexes[X_index] end
+  # NOTE: Plants can be in here multiple times, ex Caper -> caper fruit, caper, caper berry.
+  # NOTE: Index is leaves_index, not a sparse index into plants
+  class FruitLeaf < Plant
+    def self.fruitleaf_indexes ; (0 ... fruitleaf_growths.length).to_a end
+    def self.index_translation ; fruitleaf_indexes end
+    def self.fruitleaves ; index_translation.map {|i| new i } end
+    def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
+    def raw ; material_info.plant end
+    def material_info ; MI growth.mat_type, growth.mat_index end
+    def material ; material_info.material end
+    def growth ; self.class.fruitleaf_growths[fruitleaf_index] end
+    def token ; growth.name end
+    attr_reader :fruitleaf_index
+    def initialize index, link: nil
+      @fruitleaf_index = index
+      super self.class.index_translation[index], link: link # Passthrough - different number than parent class
+    end
+  end
+
+  # NOTE: Index is seed_index, not a sparse index into plants
+  class Seed < Plant
+    def self.index_translation ; seed_indexes end
+    def plant_index ; self.class.index_translation[seed_index] end
+    def index ; seed_index end
+    def to_s ; super + " seed_index=#{seed_index}" end
+    attr_reader :seed_index
+    def initialize index, link: nil
+      @seed_index = index
+      super self.class.index_translation[index], link: link # Passthrough - different number than parent class
+    end
+  end
+
+  # # Template
+  # class X < Y
+  #   def self.index_translation ; X_indexes end
+  #   def Y_index ; self.class.index_translation[X_index] end
   #   def to_s ; super + " X_index=#{X_index}" end
   #   attr_reader :X_index
-  #   def initialize index, link: link
+  #   def initialize index, link: nil
   #     @X_index = index
   #     super Y_index, link: link
   #   end
   # end
-
-  class Seed < Plant
-  end
-
-  class FruitLeaf < Plant
-    def plant_index ; self.class.fruileaf_indexes[fruitleaf_index] end
-
-    def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
-
-    attr_reader :fruitleaf_index
-    def initialize index, link: link
-      @fruitleaf_index = index
-      super plant_index, link: link
-    end
-  end
 
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
@@ -402,7 +460,7 @@ module DFStock
     def density ; wood.solid_density if wood end
 
     attr_reader :tree_index
-    def initialize index, link: link
+    def initialize index, link: nil
       @tree_index = index
       super plant_index, link: link
     end
@@ -582,8 +640,8 @@ module DFStock
   #   add_array(Meat, :meat)
   #   add_array(Fish, :fish)
   #   add_array(UnpreparedFish, :unprepared_fish)
-  #   add_array(Egg, :egg)
-    add_array(PlantProduct, :plants)
+    add_array(Egg, :egg)
+  #   add_array(PlantProduct, :plants)
   # # add_array(DrinkPlant, :drink_plant)
   # # add_array(DrinkAnimal, :drink_animal)
   # # add_array(CheesePlant, :cheese_plant)
@@ -743,7 +801,7 @@ if self.class.const_defined? :DFHack
     def allow_inorganic= b ; settings.allow_inorganic= b end
     def stock_flags        ; settings.flags end
     def animals            ; settings.animals end
-    # def food               ; settings.food end
+    def food               ; settings.food end
     def furniture          ; settings.furniture end
     def corpses            ; settings.corpses end
     def refuse             ; settings.refuse end
