@@ -159,19 +159,46 @@ module DFStock
   end
 
   class Inorganic < Thing
-    def self.inorganics
-      df.world.raws.inorganics
-    end
+    def self.inorganic_raws ; df.world.raws.inorganics end
+    def self.inorganic_indexes ; (0 ... inorganic_raws.length).to_a end
+    def self.index_translation ; inorganic_indexes end
 
-    def self.token index
-      inorganics[index].id
-    end
+    def self.inorganics ; inorganic_indexes.map {|i| Inorganic.new i } end
 
-    def raw ; self.class.inorganics[index] end
-
+    def inorganic ; self.class.inorganic_raws[index] end
+    def raw ; inorganic end
     def material ; raw.material end
 
-    def token ; self.class.token index end
+    def token ; raw.id end
+
+    def is_ore?
+      raw.flags[:METAL_ORE]
+    end
+
+    def is_economic_stone?
+      !raw.economic_uses.empty? &&
+      !raw.flags[:METAL_ORE] &&
+      !raw.flags[:SOIL] &&
+      !material.flags[:IS_METAL]
+    end
+
+    def is_clay?
+       raw.id =~ /clay/i &&
+      !raw.flags[:AQUIFER] &&
+      !material.flags[:IS_STONE]
+    end
+
+    def is_other_stone?
+       material.flags[:IS_STONE] &&
+      !material.flags[:NO_STONE_STOCKPILE] &&
+      !is_ore? &&
+      !is_economic_stone? &&
+      !is_clay?
+    end
+
+    def is_metal?
+      material.flags[:IS_METAL]
+    end
 
     def initialize index, link: nil
       super
@@ -179,11 +206,8 @@ module DFStock
   end
 
   class Metal < Inorganic
-    def self.index_translation ; table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_metal? s ; a } end
-
-    def self.is_metal? inorganic
-      inorganic.material.flags[:IS_METAL]
-    end
+    def self.metal_indexes ; cache(:metals) { inorganics.each_with_index.inject([]) {|a,(m,i)| a << i if m.is_metal? ; a } } end
+    def self.index_translation ; metal_indexes end
 
     def inorganic_index ; self.class.index_translation[metal_index] end
     def to_s ; super + " metal_index=#{metal_index}" end
@@ -196,32 +220,15 @@ module DFStock
   end
 
   class Stone < Inorganic
-    def self.index_translation ; @table ||= ObjectSpace.each_object.select {|x| next unless x.is_a? Class ; x < self }.map(&:index_translation).flatten.sort end
+    def self.stone_indexes ; (ore_indexes + economic_indexes + other_indexes + clay_indexes).sort end
+    def self.index_translation ; stone_indexes end
 
-    def self.is_ore? inorganic
-      inorganic.flags[:METAL_ORE]
-    end
+    def self.stones ; end
 
-    def self.is_economic? inorganic
-      !inorganic.economic_uses.empty? &&
-      !inorganic.flags[:METAL_ORE] &&
-      !inorganic.flags[:SOIL] &&
-      !inorganic.material.flags[:IS_METAL]
-    end
-
-    def self.is_clay? inorganic
-       inorganic.id =~ /clay/i &&
-      !inorganic.flags[:AQUIFER] &&
-      !inorganic.material.flags[:IS_STONE]
-    end
-
-    def self.is_other? inorganic
-       inorganic.material.flags[:IS_STONE] &&
-      !inorganic.material.flags[:NO_STONE_STOCKPILE] &&
-      !is_ore?(inorganic) &&
-      !is_economic?(inorganic) &&
-      !is_clay?(inorganic)
-    end
+    def self.ore_indexes      ; cache(:org)        { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
+    def self.economic_indexes ; cache(:inorganics) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
+    def self.other_indexes    ; cache(:other)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
+    def self.clay_indexes     ; cache(:clay)       { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
 
     def initialize index, link: nil
       super
@@ -229,7 +236,7 @@ module DFStock
   end
 
   class Ore < Stone
-    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_ore? s ; a } end
+    def self.index_translation ; ore_indexes end
     def inorganic_index ; self.class.index_translation[ore_index] end
     def to_s ; super + " ore_index=#{ore_index}" end
 
@@ -241,7 +248,7 @@ module DFStock
   end
 
   class EconomicStone < Stone
-    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_economic? s ; a } end
+    def self.index_translation ; economic_indexes end
     def inorganic_index ; self.class.index_translation[economic_index] end
     def to_s ; super + " economic_index=#{economic_index}" end
 
@@ -253,7 +260,7 @@ module DFStock
   end
 
   class OtherStone < Stone
-    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_other? s ; a } end
+    def self.index_translation ; other_indexes end
     def inorganic_index ; self.class.index_translation[other_index] end
     def to_s ; super + " other_index=#{other_index}" end
 
@@ -265,7 +272,7 @@ module DFStock
   end
 
   class Clay < Stone
-    def self.index_translation ; @table ||= inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if is_clay? s ; a } end
+    def self.index_translation ; clay_indexes end
     def inorganic_index ; self.class.index_translation[clay_index] end
     def to_s ; super + " clay_index=#{clay_index}" end
 
@@ -336,7 +343,6 @@ module DFStock
 
     attr_reader :plant_index
     def initialize index, link: link
-       p [:init_plant, index, link.class]
       @plant_index = index
       super index, link: link
     end
@@ -381,12 +387,11 @@ module DFStock
 
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
-    def self.index_translation ; p [:tree, :index_translation] ;  tree_indexes end
-    class << self
-      alias trees plants
-    end
-    def self.woods ; trees.select {|t| t.wood } end # Just the wood-producing trees
-    def plant_index ; p [:tree, :plant_index] ; self.class.tree_indexes[tree_index] end
+    def self.index_translation ; tree_indexes end
+    def self.trees ; index_translation.map {|i| new i } end
+    def self.trees ; plants.select {|t| t.tree? } end
+    def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
+    def plant_index ; self.class.tree_indexes[tree_index] end
     def to_s ; super + " tree_index=#{tree_index}" end
 
     alias tree plant
@@ -398,7 +403,6 @@ module DFStock
 
     attr_reader :tree_index
     def initialize index, link: link
-       p [:init_tree, index, link.class]
       @tree_index = index
       super plant_index, link: link
     end
@@ -421,11 +425,14 @@ module DFStock
   end
 
   class Quality < Thing
-    def self.index_translation ; (0 ... DFHack::ItemQuality::ENUM.length) end
-    def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
+    def self.quality_names ; DFHack::ItemQuality::NUME.keys end
+    def self.quality_indexes ; (0 ... quality_names.length).to_a end
+    def self.index_translation ; quality_indexes end
+    def self.qualities ; index_translation.new {|i| new i } end
 
-    def token ; self.class.find_quality quality_index end
-    def to_s ; "#{super} @quality_index=#{index}" end
+    def quality ; self.class.quality_names[quality_index] end
+    def token ; quality end
+    def to_s ; "#{super} @quality_index=#{quality_index}" end
 
     attr_reader :quality_index
     def initialize index, link: nil
