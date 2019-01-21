@@ -44,7 +44,6 @@ module DFStock
           end
 
           flags_array_name = original_name || actual_name
-          # p [:stockklass, stockklass, (stockklass.index_translation if stockklass.respond_to?(:index_translation))]
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
             list = stockklass.index_translation
@@ -66,11 +65,41 @@ end
 # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 module DFStock
   module Raw
-    def raw_mod ; end
+    def tree? ; raw.flags[:TREE] end
   end
 
   module Material
-    def material_mod ; end
+    # I've been doing these as instance methods in one place, and class methods that are used by instance methods in another
+    # If it's not class methods, how does it get used pre-instantiation?
+    def material_ids   ; materials.map &:id end
+
+    def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+
+    # Plant-based methods
+    def mill?       ; material_ids.include? 'MILL' end
+    def drink?      ; material_ids.include? 'DRINK' end
+    def wood?       ; material_ids.include? 'WOOD' end
+    def seed?       ; material_ids.include? 'SEED' end
+    def leaf?       ; material_ids.include? 'LEAF' end
+    def thread?     ; material_ids.include? 'THREAD' end
+    def structural? ; material_ids.include? 'STRUCTURAL' end
+
+    def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
+    def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
+    def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
+    def mat_seed       ; material_ids.find {|id| id == 'SEED' } end
+    def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
+    def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
+    def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
+
+    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
+    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
+    def edible?         ; edible_cooked? || edible_raw? end
+    def brewable?       ; material_flags[:ALCOHOL_PLANT] end
+    def millable?       ; mill? end
+
+    def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
+    def above_ground? ; !subterranean end
   end
 
   module PlantMaterial
@@ -257,7 +286,6 @@ module DFStock
       !c.flags[:EQUIPMENT_WAGON] &&
        c.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/
     end
-    def self.reset_index ; @table = nil end
     def self.index_translation ; @table ||= creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } end
     def creatures_index ; self.class.index_translation[creature_index] end
 
@@ -268,7 +296,7 @@ module DFStock
     def provides_leather? ; cache(:leather) { creature.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     def token ; creature.creature_id end
-    # def to_s ; "#{super} creature_index=#{creature_index}" end
+    def to_s ; "#{super} creature_index=#{creature_index}" end
 
     def flags ; creature.flags end
 
@@ -283,54 +311,131 @@ module DFStock
     end
   end
 
-#   class Material < Thing
-#
-#     def stone? ; flags.to_hash[:IS_STONE] end
+  class Plant < Thing
+    def self.plant_raws ; df.world.raws.plants.all end
+
+    def self.plant_indexes ; (0 ... plant_raws.length).to_a end
+    def self.index_translation ; plant_indexes end
+    def self.plants ; plant_indexes.map {|i| Plant.new i } end
+
+    def self.plantproduct_indexes ; cache(:plantproduct) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_product? ; a } } end
+    def self.fruitleaf_indexes    ; cache(:fruitleaf)    { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_fruit? || x.has_leaf? ; a } } end
+    def self.tree_indexes         ; cache(:trees)        { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
+
+    def has_product? plant ; end # Food/plants
+    def has_fruit? plant ; end # Food/plants
+    def has_leaf? plant ; end # Food/plants
+
+    def plant ; self.class.plant_raws[plant_index] end
+
+    def raw ; plant end
+
+    def token ; plant.id end
+
+    def materials ; plant.material end
+
+    attr_reader :plant_index
+    def initialize index, link: link
+       p [:init_plant, index, link.class]
+      @plant_index = index
+      super index, link: link
+    end
+  end
+
+  class PlantProduct < Plant
+    def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
+
+    def to_s ; super + " plantproduct_index=#{plantproduct_index}" end
+
+    attr_reader :plantproduct_index
+    def initialize index, link: link
+      @plantproduct_index = index
+      super plant_index, link: link
+    end
+  end
+
+  # class X < Y # Template
+  #   def Y_index ; self.class.X_indexes[X_index] end
+  #   def to_s ; super + " X_index=#{X_index}" end
+  #   attr_reader :X_index
+  #   def initialize index, link: link
+  #     @X_index = index
+  #     super Y_index, link: link
+  #   end
+  # end
+
+  class Seed < Plant
+  end
+
+  class FruitLeaf < Plant
+    def plant_index ; self.class.fruileaf_indexes[fruitleaf_index] end
+
+    def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
+
+    attr_reader :fruitleaf_index
+    def initialize index, link: link
+      @fruitleaf_index = index
+      super plant_index, link: link
+    end
+  end
+
+  # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
+  class Tree < Plant
+    def self.index_translation ; p [:tree, :index_translation] ;  tree_indexes end
+    class << self
+      alias trees plants
+    end
+    def self.woods ; trees.select {|t| t.wood } end # Just the wood-producing trees
+    def plant_index ; p [:tree, :plant_index] ; self.class.tree_indexes[tree_index] end
+    def to_s ; super + " tree_index=#{tree_index}" end
+
+    alias tree plant
+    def wood ; materials.find {|m| m.id == 'WOOD' } end
+
+    def value   ; wood.material_value if wood end
+    def color   ; wood.build_color if wood end
+    def density ; wood.solid_density if wood end
+
+    attr_reader :tree_index
+    def initialize index, link: link
+       p [:init_tree, index, link.class]
+      @tree_index = index
+      super plant_index, link: link
+    end
+  end
+
+  # TODO: Find item raws for these
+  class Furniture < Thing
+    def self.index_translation ; (0 ... DFHack::FurnitureType::ENUM.length) end
+    def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
+
+    def furniture ; self.class.find_furniture furniture_index end
+    def token ; furniture end
+    def to_s ; "#{super} furniture_index=#{furniture_index}" end
+
+    attr_reader :furniture_index
+    def initialize index, link: nil
+      @furniture_index = index
+      super index, link: link
+    end
+  end
+
+  class Quality < Thing
+    def self.index_translation ; (0 ... DFHack::ItemQuality::ENUM.length) end
+    def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
+
+    def token ; self.class.find_quality quality_index end
+    def to_s ; "#{super} @quality_index=#{index}" end
+
+    attr_reader :quality_index
+    def initialize index, link: nil
+      @quality_index = index
+      super index, link: link
+    end
+  end
+
 #     # def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-#
 #     def color ; material.color end
-#
-#     def token ; @material.id end
-#     def to_s ; "#{super} @material_type=#{material_type} @material_idx=#{material_idx}" end
-#
-#     attr_reader :material
-#     def initialize id, link: nil
-#       super id, link: link
-#       @material = self.class.find_material_info id, 0
-#       raise RuntimeError, "Unknown material id: #{id}" unless material
-#     end
-#   end
-#
-#   class Stone < Material
-#     def self.find_stone id ; id end
-#
-#     def color ; stone.color end
-#
-#     def token ; @stone.id end
-#     def to_s ; "#{super} @stone_id=#{id}" end
-#
-#     alias stone material
-#     def initialize id, link: nil
-#       super id, link: link
-#       raise RuntimeError, "Unknown stone id: #{id}" unless stone && stone.stone?
-#     end
-#   end
-#
-#
-#   class Metal < Material
-#     def self.find_metal id ; id end
-#
-#     def token ; @metal end
-#     def to_s ; "#{super} @metal_id=#{id}" end
-#
-#     attr_reader :metal
-#     def initialize id, link: nil
-#       super id, link: link
-#       @metal = self.class.find_metal id
-#       raise RuntimeError, "Unknown metal id: #{id}" unless metal
-#     end
-#   end
-#
 #
 #   class Fish < Thing
 #     def self.find_fish id ; find_organic id, :Fish end
@@ -346,7 +451,6 @@ module DFStock
 #     end
 #   end
 #
-#
 #   class Meat < Thing
 #     def self.find_meat id ; find_organic id, :Meat end
 #
@@ -358,21 +462,6 @@ module DFStock
 #       super id, link: link
 #       @meat = self.class.find_meat id
 #       raise RuntimeError, "Unknown meat id: #{id}" unless meat
-#     end
-#   end
-#
-#
-#   class Furniture < Thing
-#     def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
-#
-#     def token ; @furniture end
-#     def to_s ; "#{super} @furniture_id=#{id}" end
-#
-#     attr_reader :furniture
-#     def initialize id, link: nil
-#       super id, link: link
-#       @furniture = self.class.find_furniture id
-#       raise RuntimeError, "Unknown furniture id: #{id}" unless furniture
 #     end
 #   end
 #
@@ -470,21 +559,6 @@ module DFStock
 #     end
 #   end
 #
-  class Quality < Thing
-    def self.index_translation ; (0 ... DFHack::ItemQuality::ENUM.length) end
-    def self.find_quality id ; DFHack::ItemQuality::ENUM[id] end
-
-    def token ; self.class.find_quality quality_index end
-    def to_s ; "#{super} @quality_index=#{index}" end
-
-    attr_reader :quality_index
-    def initialize index, link: nil
-      @quality_index = index
-      super index, link: link
-      # raise RuntimeError, "Unknown quality level: #{id}" unless quality
-    end
-  end
-
 end
 
 module DFStock
@@ -496,19 +570,19 @@ module DFStock
   end
 
   module FoodMod
-  #   extend Scaffold
-  #   add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
+    extend Scaffold
+    add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
   #   add_array(Meat, :meat)
   #   add_array(Fish, :fish)
   #   add_array(UnpreparedFish, :unprepared_fish)
   #   add_array(Egg, :egg)
-  #   add_array(Plant, :plants)
+    add_array(PlantProduct, :plants)
   # # add_array(DrinkPlant, :drink_plant)
   # # add_array(DrinkAnimal, :drink_animal)
   # # add_array(CheesePlant, :cheese_plant)
   # # add_array(CheeseAnimal, :cheese_animal)
-  #   add_array(Seed, :seeds)
-  #   add_array(Leaf, :leaves)
+    add_array(Seed, :seeds)
+    add_array(FruitLeaf, :leaves)
   # # add_array(PowderCreature, :powder_creature)
   #   add_array(PowderPlant, :powder_plant)
   # # add_array(Glob, :glob)
@@ -521,7 +595,7 @@ module DFStock
 
   module FurnitureMod
     extend Scaffold
-    # add_array(Furniture, :type)
+    add_array(Furniture, :type)
     add_array(Metal, :metals, :mats)
     # add_array(OtherFurnitureMaterial, :other_materials, :other_mats)
     add_array(Quality, :quality_core)
@@ -596,7 +670,7 @@ module DFStock
 
   module WoodMod
     extend Scaffold
-    # add_array(Wood, :wood, :mats)
+    add_array(Tree, :tree, :mats)
   end
 
   module WeaponsMod
