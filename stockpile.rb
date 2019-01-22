@@ -65,64 +65,34 @@ end
 # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 module DFStock
   module Raw
-    def tree? ; raw.flags[:TREE] end
+    def materials ; raw.material end # NOTE: Redefine as appropriate in the base-class when redefining material.
+    def material  ; materials.first end
   end
 
   module Material
-    # I've been doing these as instance methods in one place, and class methods that are used by instance methods in another
-    # If it's not class methods, how does it get used pre-instantiation?
     def material_ids   ; materials.map &:id end
-
     def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-
-    # Plant-based methods
-    def mill?       ; material_ids.include? 'MILL' end
-    def drink?      ; material_ids.include? 'DRINK' end
-    def wood?       ; material_ids.include? 'WOOD' end
-    def seed?       ; material_ids.include? 'SEED' end
-    def leaf?       ; material_ids.include? 'LEAF' end
-    def thread?     ; material_ids.include? 'THREAD' end
-    def structural? ; material_ids.include? 'STRUCTURAL' end
-
-    def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
-    def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
-    def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
-    def mat_seed       ; material_ids.find {|id| id == 'SEED' } end
-    def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
-    def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
-    def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
-
-    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
-    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
-    def edible?         ; edible_cooked? || edible_raw? end
-    def brewable?       ; material_flags[:ALCOHOL_PLANT] end
-    def millable?       ; mill? end
-
-    def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
-    def above_ground? ; !subterranean end
-  end
-
-  module PlantMaterial
-    include Material
-    def plant_mod ; end
   end
 
   class Thing
-    include Material
     include Raw
+    include Material
+    def self.material_info id, cat ; df::MaterialInfo.new cat, id end
+    def self.material id, cat = 0 ; material_info(cat, id).material end # FIXME How to create the material directly?
 
-    def self.find_material_info id, cat ; df::MaterialInfo.new cat, id end
-    def self.find_material id, cat = 0 ; find_material_info(cat, id).material end # FIXME How to create the material directly?
-
-    # (34, :fish) ->
-    def self.find_organic cat_index, cat_name
+    def self.mat_table ; df.world.raws.mat_table end
+    def self.find_organic index, cat ; [mat_table.organic_types[cat][index], mat_table.organic_indexes[cat][index]] end
+    def self.organic cat_index, cat_name # eg: (34, :Fish) -> Creature_ID, Caste_ID
       cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
       raise "Unknown category '#{cat_name}'" unless cat_num
-      mat_type  = df.world.raws.mat_table.organic_types[  cat_num][cat_index]
-      mat_index = df.world.raws.mat_table.organic_indexes[cat_num][cat_index]
-      # p [:f_o, cat_index, cat_name, cat_num, mat_type, mat_index]
-      find_material_info mat_type, mat_index
+      mat_type, mat_index = find_organic cat_index, cat_num
     end
+
+    private
+    def food_indexes *ms ; ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a } end
+
+    public
+    def food_mat_indexes ; food_indexes *materials end
     def  enabled? ; raise unless link ; link[index] end
     def  enable   ; raise unless link ; link[index] = true  end
     def disable   ; raise unless link ; link[index] = false end
@@ -143,10 +113,10 @@ module DFStock
       return @@cache[cache_id] if @@cache.include?(cache_id)
       @@cache[cache_id] = yield
     end
-    def self.clear_cache ; @@cache = {} end
+    def self.clear_cache ;   @@cache = {} end
+    def self.inspect_cache ; @@cache end
 
     def token ; 'NONE' end
-    # def to_s ; "#{self.class.name}:#{'0x%016x' % object_id } linked=#{!!link} enabled=#{!!enabled?} token=#{token} index=#{index}" end
     def to_s ; "#{self.class.name} linked=#{!!link}#{" enabled=#{!!enabled?}" if link} token=#{token} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
@@ -162,13 +132,11 @@ module DFStock
   class Inorganic < Thing
     def self.inorganic_raws ; df.world.raws.inorganics end
     def self.inorganic_indexes ; (0 ... inorganic_raws.length).to_a end
+    def self.inorganics ; inorganic_indexes.each_index.map {|i| Inorganic.new i } end
     def self.index_translation ; inorganic_indexes end
 
-    def self.inorganics ; inorganic_indexes.map {|i| Inorganic.new i } end
-
-    def inorganic ; self.class.inorganic_raws[index] end
-    def raw ; inorganic end
-    def material ; raw.material end
+    def raw ; self.class.inorganic_raws[index] end
+    def materials ; [raw.material] end
 
     def token ; raw.id end
 
@@ -208,9 +176,10 @@ module DFStock
 
   class Metal < Inorganic
     def self.metal_indexes ; cache(:metals) { inorganics.each_with_index.inject([]) {|a,(m,i)| a << i if m.is_metal? ; a } } end
+    def self.metals ; metal_indexes.each_index.map {|i| Metal.new i } end
     def self.index_translation ; metal_indexes end
 
-    def inorganic_index ; self.class.index_translation[metal_index] end
+    def inorganic_index ; self.class.metal_indexes[metal_index] end
     def to_s ; super + " metal_index=#{metal_index}" end
 
     attr_reader :metal_index
@@ -222,23 +191,27 @@ module DFStock
 
   class Stone < Inorganic
     def self.stone_indexes ; (ore_indexes + economic_indexes + other_indexes + clay_indexes).sort end
+    def self.stones ; stone_indexes.each_index.map {|i| Stone.new i } end
     def self.index_translation ; stone_indexes end
-
-    def self.stones ; end
 
     def self.ore_indexes      ; cache(:org)        { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
     def self.economic_indexes ; cache(:inorganics) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
     def self.other_indexes    ; cache(:other)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
     def self.clay_indexes     ; cache(:clay)       { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
 
+    def inorganic_index ; self.class.stone_indexes[stone_index] end
+
+    attr_reader :stone_index
     def initialize index, link: nil
-      super
+      @stone_index = index
+      super inorganic_index, link: link
     end
   end
 
   class Ore < Stone
+    def self.ores ; ore_indexes.each_index.map {|i| Ore.new i } end
     def self.index_translation ; ore_indexes end
-    def inorganic_index ; self.class.index_translation[ore_index] end
+    def inorganic_index ; self.class.ore_indexes[ore_index] end
     def to_s ; super + " ore_index=#{ore_index}" end
 
     attr_reader :ore_index
@@ -249,8 +222,9 @@ module DFStock
   end
 
   class EconomicStone < Stone
+    def self.economic_stones ; economic_indexes.each_index.map {|i| Ore.new i } end
     def self.index_translation ; economic_indexes end
-    def inorganic_index ; self.class.index_translation[economic_index] end
+    def inorganic_index ; self.class.economic_indexes[economic_index] end
     def to_s ; super + " economic_index=#{economic_index}" end
 
     attr_reader :economic_index
@@ -261,8 +235,9 @@ module DFStock
   end
 
   class OtherStone < Stone
+    def self.other_stones ; other_indexes.each_index.map {|i| OtherStone.new i } end
     def self.index_translation ; other_indexes end
-    def inorganic_index ; self.class.index_translation[other_index] end
+    def inorganic_index ; self.class.other_indexes[other_index] end
     def to_s ; super + " other_index=#{other_index}" end
 
     attr_reader :other_index
@@ -273,8 +248,9 @@ module DFStock
   end
 
   class Clay < Stone
+    def self.clays ; clay_indexes.each_index.map {|i| Clay.new i } end
     def self.index_translation ; clay_indexes end
-    def inorganic_index ; self.class.index_translation[clay_index] end
+    def inorganic_index ; self.class.clay_indexes[clay_index] end
     def to_s ; super + " clay_index=#{clay_index}" end
 
     attr_reader :clay_index
@@ -289,36 +265,51 @@ module DFStock
   # NOTE: Not all creatures are stockpilable, and not everything in the array is a creature
   # TODO: Derive Animals from this, and use this then non-sparse class to parent eggs.
   class Creature < Thing
-    def self.creatures ; cache([:creature]) { df.world.raws.creatures.all } end
-    def self.find_creature id ; creatures[id] end
+    def self.creature_raws ; cache([:creatures]) { df.world.raws.creatures.all } end
+    def self.creature_indexes ; (0 ... creature_raws.length).to_a end
+    def self.creatures ; creature_indexes.each_index.map {|i| Creature.new i } end
+    def self.index_translation ; creature_indexes end
 
-    def self.is_creature? c
-      !c.flags[:EQUIPMENT_WAGON] &&
-       c.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/
-    end
-    def self.creatures_indexes ; cache(:creatures) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if is_creature? c ; a } } end
-    def self.index_translation ; creatures_index end
-    def creatures_index ; self.class.creatures_indexes[creature_index] end
+    def self.find_creature_by_organic index, cat_name ; creature_index, caste_num = organic(index, cat_name) ; creature_raws[creature_index].caste[caste_num] ; end
 
-    def edible?           ; true end # What won't they eat? Lol! FIXME?
-    def lays_eggs?        ; cache(:eggs   ) { creature.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
-    def grazer?           ; cache(:grazer ) { creature.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
-    def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-    def provides_leather? ; cache(:leather) { creature.material.any? {|mat| mat.id == 'LEATHER' } } end
+    def raw ; self.class.creature_raws[creature_index] end
+    def flags ; raw.flags end
+    def token ; raw.creature_id end
 
-    def token ; creature.creature_id end
+    def caste_id ; @caste_id ||= 0 end
+    def caste ; raw.caste[caste_id] end
+
     def to_s ; "#{super} creature_index=#{creature_index}" end
 
-    def flags ; creature.flags end
+    def is_creature?         ; cache(:creature,  creature_index) { !flags[:EQUIPMENT_WAGON] } end
+    def is_stockpile_animal? ; cache(:stockpile, creature_index) { token !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ } end
 
-    def creature ; self.class.find_creature creature_index end
-    def caste_id ; @caste_id ||= 0 end
-    def caste ; creature.caste[caste_id] end
+    def edible?           ; true end # What won't they eat? Lol! FIXME?
+    def lays_eggs?        ; cache(:eggs,    creature_index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
+    def grazer?           ; cache(:grazer,  creature_index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
+    def produces_honey?   ; cache(:honey,   creature_index) { raw.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
+    def provides_leather? ; cache(:leather, creature_index) { raw.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     attr_reader :creature_index
     def initialize index, link: nil
       @creature_index = index
-      super creatures_index, link: link
+      super index, link: link
+    end
+  end
+
+  class Animal < Creature
+    def self.animal_indexes ; cache(:animals) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if (c.is_creature? && c.is_stockpile_animal?) ; a } } end
+    def self.animals ; animal_indexes.each_index.map {|i| Animal.new i } end
+    def self.index_translation ; animals_indexes end
+
+    def creature_index ; self.class.animal_indexes[animal_index] end
+
+    def to_s ; super + " animal_index=#{animal_index}" end
+
+    attr_reader :animal_index
+    def initialize index, link: nil
+      @animal_index = index
+      super creature_index, link: link
     end
   end
 
@@ -326,18 +317,21 @@ module DFStock
     def self.egg_category ; DFHack::OrganicMatCategory::NUME[:Eggs] end
     def self.egg_types ; df.world.raws.mat_table.organic_types[DFHack::OrganicMatCategory::NUME[:Eggs]] end
     def self.egg_indexes ; (0 ... egg_types.length).to_a end
+    def self.eggs ; egg_indexes.each_index.map {|i| Egg.new i } end
     def self.index_translation ; egg_indexes end
 
     def creature_index ; self.class.egg_types[egg_index] end
-    def creature ; self.class.creatures[self.class.egg_types[egg_index]] end
+    def materials ; raw.material.select {|m| m.id =~ /EGG/ } end
+    def material ; materials.find {|m| m.id =~ /YOLK/ } end
 
+    def token ; raw.caste.first.caste_name.first end
     def to_s ; super + " egg_index=#{egg_index}" end
-    def token ; creature.caste.first.caste_name.first end
 
     attr_reader :egg_index
     def index ; egg_index end
     def initialize index, link: nil
       @egg_index = index
+      # super creature_index, link: link # Passthrough
       super creature_index, link: link # Passthrough
       @index = egg_index
     end
@@ -347,12 +341,39 @@ module DFStock
     def self.plant_raws ; df.world.raws.plants.all end
 
     def self.plant_indexes ; (0 ... plant_raws.length).to_a end
+    def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
     def self.index_translation ; plant_indexes end
-    def self.plants ; plant_indexes.map {|i| Plant.new i } end
 
-    def self.plantproduct_indexes ; cache(:plantproduct) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_product? ; a } } end
-    def self.seed_indexes         ; cache(:seeds)        { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.has_seed? ; a } } end
-    def self.tree_indexes         ; cache(:trees)        { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
+    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_product? ; a } } end
+    def self.seed_indexes         ; cache(:seeds)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.has_seed? ; a } } end
+    def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
+
+    def mill?       ; material_ids.include? 'MILL' end
+    def drink?      ; material_ids.include? 'DRINK' end
+    def wood?       ; material_ids.include? 'WOOD' end
+    def seed?       ; material_ids.include? 'SEED' end
+    def leaf?       ; material_ids.include? 'LEAF' end
+    def thread?     ; material_ids.include? 'THREAD' end
+    def structural? ; material_ids.include? 'STRUCTURAL' end
+
+    def mat_mill       ; materials.find {|id| id == 'MILL' } end
+    def mat_drink      ; materials.find {|id| id == 'DRINK' } end
+    def mat_wood       ; materials.find {|id| id == 'WOOD' } end
+    def mat_seed       ; materials.find {|id| id == 'SEED' } end
+    def mat_leaf       ; materials.find {|id| id == 'LEAF' } end
+    def mat_thread     ; materials.find {|id| id == 'THREAD' } end
+    def mat_structural ; materials.find {|id| id == 'STRUCTURAL' } end
+
+    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
+    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
+    def edible?         ; edible_cooked? || edible_raw? end
+    def brewable?       ; material_flags[:ALCOHOL_PLANT] end
+    def millable?       ; mill? end
+
+    def tree? ; raw.flags[:TREE] end
+
+    def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
+    def above_ground? ; !subterranean end
 
     def growths ; raw.growths end
     def growth_ids ; growths.map(&:id) end
@@ -372,13 +393,8 @@ module DFStock
       fruitleaf_growths.map(&:id)
     end
 
-    def plant ; self.class.plant_raws[plant_index] end
-
-    def raw ; plant end
-
-    def token ; plant.id end
-
-    def materials ; plant.material end
+    def raw ; self.class.plant_raws[plant_index] end
+    def token ; raw.id end
 
     attr_reader :plant_index
     def initialize index, link: nil
@@ -387,6 +403,26 @@ module DFStock
     end
   end
 
+# Food Classes
+#   (Meat, :meat)
+#   (Fish, :fish)
+#   (UnpreparedFish, :unprepared_fish)
+  #   Egg
+#   (PlantProduct, :plants)
+#   (DrinkPlant, :drink_plant)
+#   (DrinkAnimal, :drink_animal)
+  #   FruitLeaf
+  #   Seeds
+#   (CheesePlant, :cheese_plant)
+#   (CheeseAnimal, :cheese_animal)
+#   (PowderPlant, :powder_plant)
+#   (PowderCreature, :powder_creature)
+#   (Glob, :glob)
+#   (GlobPaste, :glob_paste)
+#   (GlobPressed, :glob_pressed)
+#   (LiquidPlant, :liquid_plant)
+#   (LiquidAnimal, :liquid_animal)
+#   (LiquidMisc, :liquid_misc)
   class PlantProduct < Plant
     def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
 
@@ -403,8 +439,8 @@ module DFStock
   # NOTE: Index is leaves_index, not a sparse index into plants
   class FruitLeaf < Plant
     def self.fruitleaf_indexes ; (0 ... fruitleaf_growths.length).to_a end
+    def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
     def self.index_translation ; fruitleaf_indexes end
-    def self.fruitleaves ; index_translation.map {|i| new i } end
     def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
     def raw ; material_info.plant end
     def material_info ; MI growth.mat_type, growth.mat_index end
@@ -420,8 +456,11 @@ module DFStock
 
   # NOTE: Index is seed_index, not a sparse index into plants
   class Seed < Plant
+    def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
     def self.index_translation ; seed_indexes end
-    def plant_index ; self.class.index_translation[seed_index] end
+
+    def material ; materials.find {|m| m.id == 'SEED' } end
+    def plant_index ; self.class.seed_indexes[seed_index] end
     def index ; seed_index end
     def to_s ; super + " seed_index=#{seed_index}" end
     attr_reader :seed_index
@@ -433,8 +472,9 @@ module DFStock
 
   # # Template
   # class X < Y
+  #   def self.X_indexes ; (0 ... ??.length).to_a end
   #   def self.index_translation ; X_indexes end
-  #   def Y_index ; self.class.index_translation[X_index] end
+  #   def Y_index ; self.class.X_indexes[X_index] end
   #   def to_s ; super + " X_index=#{X_index}" end
   #   attr_reader :X_index
   #   def initialize index, link: nil
@@ -445,10 +485,9 @@ module DFStock
 
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
-    def self.index_translation ; tree_indexes end
-    def self.trees ; index_translation.map {|i| new i } end
     def self.trees ; plants.select {|t| t.tree? } end
     def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
+    def self.index_translation ; tree_indexes end
     def plant_index ; self.class.tree_indexes[tree_index] end
     def to_s ; super + " tree_index=#{tree_index}" end
 
@@ -499,7 +538,8 @@ module DFStock
     end
   end
 
-#     # def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
+#
+#     def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
 #     def color ; material.color end
 #
 #   class Fish < Thing
@@ -533,15 +573,8 @@ module DFStock
 #   class PlantRaw < Thing
 #     def self.find_plant id ; df.world.raws.plants.all[id] end
 #
-#     def flags ; plant.flags end
-#
-#     def tree? ; flags.to_hash[:TREE] end
-#
 #     def color ; plant.material[0].basic_color end
 #     def build_color ; plant.material[0].build_color end
-#     # def density ; plant.material[0].solid_density end
-#
-#     def materials      ; plant.material end
 #
 #     def food_mat_indexes
 #       Hash[materials.map {|m|
@@ -549,36 +582,6 @@ module DFStock
 #         [m.id, idxs]
 #       }]
 #     end
-#
-#     def material_ids   ; materials.map &:id end
-#
-#     def mill?       ; material_ids.include? 'MILL' end
-#     def drink?      ; material_ids.include? 'DRINK' end
-#     def wood?       ; material_ids.include? 'WOOD' end
-#     def seed?       ; material_ids.include? 'SEED' end
-#     def leaf?       ; material_ids.include? 'LEAF' end
-#     def thread?     ; material_ids.include? 'THREAD' end
-#     def structural? ; material_ids.include? 'STRUCTURAL' end
-#
-#     def mat_mill       ; material_ids.find {|id| id == 'MILL' } end
-#     def mat_drink      ; material_ids.find {|id| id == 'DRINK' } end
-#     def mat_wood       ; material_ids.find {|id| id == 'WOOD' } end
-#     def mat_seed       ; material_ids.find {|id| id == 'SEED' } end
-#     def mat_leaf       ; material_ids.find {|id| id == 'LEAF' } end
-#     def mat_thread     ; material_ids.find {|id| id == 'THREAD' } end
-#     def mat_structural ; material_ids.find {|id| id == 'STRUCTURAL' } end
-#
-#     def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-#
-#     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
-#     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
-#     def edible?         ; edible_cooked? || edible_raw? end
-#     def brewable?       ; material_flags[:ALCOHOL_PLANT] end
-#
-#     def millable?       ; !!mat_thread end
-#
-#     def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
-#     def above_ground? ; !subterranean end
 #
 #     def token ; plant.id end
 #     def to_s ; "#{super} @plant_id=#{id}" end
@@ -590,40 +593,6 @@ module DFStock
 #       raise RuntimeError, "Unknown plant id: #{id}" unless plant
 #     end
 #   end
-#
-#   class Plant < PlantRaw
-#     def initialize *a
-#       super
-#       raise ArgumentError, "Unknown food-plant id: #{id}" unless plant && food_plant?
-#     end
-#   end
-#
-#   class Seed < PlantRaw
-#     def initialize *a
-#       super
-#       raise ArgumentError, "Unknown seed id: #{id}" unless plant && seed?
-#     end
-#   end
-#
-#   class Leaf < PlantRaw
-#     def initialize *a
-#       super
-#       raise ArgumentError, "Unknown leaf id: #{id}" unless plant && leaf?
-#     end
-#   end
-#
-#   # Really "Tree", because the list include non-wood bearing trees.
-#   class Wood < PlantRaw # FIXME rename Tree, call the field wood
-#     def mat_wood ; super || mat_structural end
-#     def density ; mat_wood.solid_density end
-#
-#     alias wood plant
-#     def initialize *a
-#       super
-#       raise ArgumentError, "Unknown wood id: #{id}" unless wood && tree?
-#     end
-#   end
-#
 end
 
 module DFStock
@@ -631,7 +600,7 @@ module DFStock
     extend Scaffold
     add_flag(:empty_traps)
     add_flag(:empty_cages)
-    add_array(Creature, :animals, :enabled)
+    add_array(Animal, :animals, :enabled)
   end
 
   module FoodMod
@@ -648,8 +617,8 @@ module DFStock
   # # add_array(CheeseAnimal, :cheese_animal)
     add_array(Seed, :seeds)
     add_array(FruitLeaf, :leaves)
-  # # add_array(PowderCreature, :powder_creature)
   #   add_array(PowderPlant, :powder_plant)
+  # # add_array(PowderCreature, :powder_creature)
   # # add_array(Glob, :glob)
   # # add_array(GlobPaste, :glob_paste)
   # # add_array(GlobPressed, :glob_pressed)
