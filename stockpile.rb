@@ -81,11 +81,12 @@ module DFStock
     def self.material id, cat = 0 ; material_info(cat, id).material end # FIXME How to create the material directly?
 
     def self.mat_table ; df.world.raws.mat_table end
-    def self.find_organic index, cat ; [mat_table.organic_types[cat][index], mat_table.organic_indexes[cat][index]] end
+    def self.organic_category cat_name ; cat_name.is_a?(Numeric) ? cat_name : DFHack::OrganicMatCategory::NUME[cat_name] end
+    def self.organic_types ; cache(:organics) { mat_table.organic_types.each_with_index.map {|ot,i| ot.zip mat_table.organic_indexes[i] } } end
     def self.organic cat_index, cat_name # eg: (34, :Fish) -> Creature_ID, Caste_ID
-      cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
+      cat_num = organic_category cat_name
       raise "Unknown category '#{cat_name}'" unless cat_num
-      mat_type, mat_index = find_organic cat_index, cat_num
+      organic_types[cat_num][cat_index]
     end
 
     private
@@ -310,6 +311,24 @@ module DFStock
     def initialize index, link: nil
       @animal_index = index
       super creature_index, link: link
+    end
+  end
+
+  class Meat < Thing
+    def self.meat_category ; organic_category :Meat end
+    def self.meat_indexes ; (0 ... organic_types(meat_category).length).to_a end
+    def self.meat_raws ; meat_indexes.map {|i,c| material i, c } end
+    def self.meats ; meat_indexes.each_index.map {|i| Meat.new i } end
+    def self.index_translation ; meat_indexes ; end
+
+    def raw ; self.class.meat_raws[meat_index] end
+    def token ; @meat end
+    def to_s ; "#{super} @meat_id=#{id}" end
+
+    attr_reader :meat_index
+    def initialize index, link: nil
+      @meat_index = index
+      super index, link: link
     end
   end
 
@@ -556,19 +575,6 @@ module DFStock
 #     end
 #   end
 #
-#   class Meat < Thing
-#     def self.find_meat id ; find_organic id, :Meat end
-#
-#     def token ; @meat end
-#     def to_s ; "#{super} @meat_id=#{id}" end
-#
-#     attr_reader :meat
-#     def initialize id, link: nil
-#       super id, link: link
-#       @meat = self.class.find_meat id
-#       raise RuntimeError, "Unknown meat id: #{id}" unless meat
-#     end
-#   end
 #
 #   class PlantRaw < Thing
 #     def self.find_plant id ; df.world.raws.plants.all[id] end
