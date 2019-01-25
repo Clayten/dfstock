@@ -77,15 +77,15 @@ module DFStock
   class Thing
     include Raw
     include Material
-    def self.material_info id, cat ; df::MaterialInfo.new cat, id end
-    def self.material id, cat = 0 ; material_info(cat, id).material end # FIXME How to create the material directly?
+    def self.material_info id, cat ; df::MaterialInfo.new id, cat end
+    def self.material id, cat ; material_info(id, cat).material end # FIXME How to create the material directly?
 
     def self.mat_table ; df.world.raws.mat_table end
     def self.organic_category cat_name ; cat_name.is_a?(Numeric) ? cat_name : DFHack::OrganicMatCategory::NUME[cat_name] end
     def self.organic_types ; cache(:organics) { mat_table.organic_types.each_with_index.map {|ot,i| ot.zip mat_table.organic_indexes[i] } } end
     def self.organic cat_index, cat_name # eg: (34, :Fish) -> Creature_ID, Caste_ID
       cat_num = organic_category cat_name
-      raise "Unknown category '#{cat_name}'" unless cat_num
+      raise "Unknown category '#{cat_name.inspect}'" unless cat_num
       organic_types[cat_num][cat_index]
     end
 
@@ -99,6 +99,10 @@ module DFStock
     def disable   ; raise unless link ; link[index] = false end
     def  toggle   ; raise unless link ; set !enabled? end
     def set   x   ; raise unless link ; x ? enable : disable end
+
+    def basic_color ; material.basic_color end
+    def build_color ; material.build_color end
+    def tile_color ; material.tile_color end
 
     # Cache lookups - this is pretty important for performance
     @@cache = {} unless class_variables.include? :@@cache
@@ -277,8 +281,9 @@ module DFStock
     def flags ; raw.flags end
     def token ; raw.creature_id end
 
-    def caste_id ; @caste_id ||= 0 end
-    def caste ; raw.caste[caste_id] end
+    def sex_symbol ; "#{caste_index.zero? ? '♀' : '♂'}" end
+    def caste_index ; @caste_index ||= 0 end
+    def caste_raw ; raw.caste[caste_index] end
 
     def to_s ; "#{super} creature_index=#{creature_index}" end
 
@@ -292,8 +297,9 @@ module DFStock
     def provides_leather? ; cache(:leather, creature_index) { raw.material.any? {|mat| mat.id == 'LEATHER' } } end
 
     attr_reader :creature_index
-    def initialize index, link: nil
+    def initialize index, link: nil, caste: nil
       @creature_index = index
+      @caste_index = caste
       super index, link: link
     end
   end
@@ -314,16 +320,22 @@ module DFStock
     end
   end
 
-  class Meat < Thing
+  # Meat indexes are materials, which then point to their animal
+  class Meat < Creature
     def self.meat_category ; organic_category :Meat end
-    def self.meat_indexes ; (0 ... organic_types(meat_category).length).to_a end
-    def self.meat_raws ; meat_indexes.map {|i,c| material i, c } end
+    def self.meat_types ; organic_types[meat_category] end
+    def self.meat_indexes ; (0 ... meat_types.length).to_a end
+    def self.meat_materials ; cache(:meat_materials) { meat_types.map {|i,c| material_info i, c } } end
     def self.meats ; meat_indexes.each_index.map {|i| Meat.new i } end
     def self.index_translation ; meat_indexes ; end
 
-    def raw ; self.class.meat_raws[meat_index] end
-    def token ; @meat end
-    def to_s ; "#{super} @meat_id=#{id}" end
+    def mat_index ; self.class.meat_types[meat_index].first end
+    def mat_type  ; self.class.meat_types[meat_index].last end
+    def material_info ; self.class.meat_materials[meat_index] end
+    def material ; material_info.material end
+    def raw ; material_info.mode == :Creature ? material_info.creature : material_info.plant end # NOTE: Not all meats are from animals.
+    def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2]} #{material.meat_name.first}" end
+    def to_s ; "#{super} @meat_index=#{index}" end
 
     attr_reader :meat_index
     def initialize index, link: nil
@@ -332,6 +344,57 @@ module DFStock
     end
   end
 
+  class Fish < Creature
+    def self.fish_category ; organic_category :Fish end
+    def self.fish_types ; organic_types[fish_category] end
+    def self.fish_indexes ; (0 ... fish_types.length).to_a end
+    def self.fish_raws ; cache(:fish) { fish_types.map {|i,c| creature_raws[i] } } end
+    def self.fish ; fish_indexes.each_index.map {|i| Fish.new i } end
+    def self.index_translation ; fish_indexes ; end
+
+    def types ; self.class.fish_types end
+    def raws ; self.class.fish_raws end
+
+    def mat_index ; types[index].first end
+    def mat_type  ; types[index].last end
+    def raw ; raws[index] end
+    def caste ; raw.caste[mat_type] end
+    def token ; "#{caste.caste_name.first}, #{sex_symbol}" end
+    def to_s ; "#{super} fish_index=#{fish_index}" end
+
+    attr_reader :fish_index
+    def initialize index, link: nil, caste: nil
+      @fish_index = index
+      super index, link: link
+    end
+  end
+
+  class UnpreparedFish < Creature
+    def self.unprepared_fish_category ; organic_category :UnpreparedFish end
+    def self.unprepared_fish_types ; organic_types[unprepared_fish_category] end
+    def self.unprepared_fish_indexes ; (0 ... unprepared_fish_types.length).to_a end
+    def self.unprepared_fish_raws ; cache(:unprepared_fish) { unprepared_fish_types.map {|i,c| creature_raws[i] } } end
+    def self.unprepared_fish ; unprepared_fish_indexes.each_index.map {|i| UnpreparedFish.new i } end
+    def self.index_translation ; unprepared_fish_indexes ; end
+
+    def types ; self.class.unprepared_fish_types end
+    def raws ; self.class.unprepared_fish_raws end
+
+    def mat_index ; types[index].first end
+    def mat_type  ; types[index].last end
+    def raw ; raws[index] end
+    def caste ; raw.caste[mat_type] end
+    def token ; "#{caste.caste_name.first}, #{caste_index.zero? ? '♀' : '♂'}" end
+    def to_s ; "#{super} unprepared_fish_index=#{unprepared_fish_index}" end
+
+    attr_reader :unprepared_fish_index
+    def initialize index, link: nil, caste: nil
+      @unprepared_fish_index = index
+      super
+    end
+  end
+
+  # Egg indexes are creatures, there is no one egg material
   class Egg < Creature
     def self.egg_category ; DFHack::OrganicMatCategory::NUME[:Eggs] end
     def self.egg_types ; df.world.raws.mat_table.organic_types[DFHack::OrganicMatCategory::NUME[:Eggs]] end
@@ -363,7 +426,7 @@ module DFStock
     def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
     def self.index_translation ; plant_indexes end
 
-    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.has_product? ; a } } end
+    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.is_plantproduct? ; a } } end
     def self.seed_indexes         ; cache(:seeds)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.has_seed? ; a } } end
     def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
 
@@ -397,12 +460,16 @@ module DFStock
     def growths ; raw.growths end
     def growth_ids ; growths.map(&:id) end
 
-    def has_product? ; end
+    def is_plantproduct? ; winter? || spring? || summer? || autumn? end
     def has_seed?  ; material_ids.include? 'SEED' end
     def has_fruit? ; growth_ids.include? 'FRUIT' end
     def has_bud?   ; growth_ids.include? 'BUD' end
     def has_leaf?  ; growth_ids.include? 'LEAVES' end
 
+    def winter? ; raw.flags[:WINTER] end
+    def spring? ; raw.flags[:SPRING] end
+    def summer? ; raw.flags[:SUMMER] end
+    def autumn? ; raw.flags[:AUTUMN] end
 
     def fruitleaf_growths ; growths.select {|g| df::MaterialInfo.new(g.mat_type, g.mat_index).material.food_mat_index[:Leaf] != -1 } end
     def self.fruitleaf_growths
@@ -414,6 +481,7 @@ module DFStock
 
     def raw ; self.class.plant_raws[plant_index] end
     def token ; raw.id end
+    def to_s ; super + " plant_index=#{plant_index}" end
 
     attr_reader :plant_index
     def initialize index, link: nil
@@ -423,15 +491,15 @@ module DFStock
   end
 
 # Food Classes
-#   (Meat, :meat)
-#   (Fish, :fish)
-#   (UnpreparedFish, :unprepared_fish)
-  #   Egg
-#   (PlantProduct, :plants)
+  # Meat
+  # Fish
+  # UnpreparedFish
+  # Egg
+  # PlantProduct
 #   (DrinkPlant, :drink_plant)
 #   (DrinkAnimal, :drink_animal)
-  #   FruitLeaf
-  #   Seeds
+  #  FruitLeaf
+  #  Seeds
 #   (CheesePlant, :cheese_plant)
 #   (CheeseAnimal, :cheese_animal)
 #   (PowderPlant, :powder_plant)
@@ -442,11 +510,14 @@ module DFStock
 #   (LiquidPlant, :liquid_plant)
 #   (LiquidAnimal, :liquid_animal)
 #   (LiquidMisc, :liquid_misc)
+
   class PlantProduct < Plant
+    def self.plantproducts ; plantproduct_indexes.map {|i| PlantProduct.new i } end
+    def self.index_translation ; plantproduct_indexes end
+  
     def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
-
     def to_s ; super + " plantproduct_index=#{plantproduct_index}" end
-
+  
     attr_reader :plantproduct_index
     def initialize index, link: nil
       @plantproduct_index = index
@@ -510,7 +581,6 @@ module DFStock
     def plant_index ; self.class.tree_indexes[tree_index] end
     def to_s ; super + " tree_index=#{tree_index}" end
 
-    alias tree plant
     def wood ; materials.find {|m| m.id == 'WOOD' } end
 
     def value   ; wood.material_value if wood end
@@ -576,29 +646,6 @@ module DFStock
 #   end
 #
 #
-#   class PlantRaw < Thing
-#     def self.find_plant id ; df.world.raws.plants.all[id] end
-#
-#     def color ; plant.material[0].basic_color end
-#     def build_color ; plant.material[0].build_color end
-#
-#     def food_mat_indexes
-#       Hash[materials.map {|m|
-#         idxs = m.food_mat_index.to_hash.select {|k,v| v != -1 }
-#         [m.id, idxs]
-#       }]
-#     end
-#
-#     def token ; plant.id end
-#     def to_s ; "#{super} @plant_id=#{id}" end
-#
-#     attr_reader :plant
-#     def initialize id, link: nil
-#       super id, link: link
-#       @plant = self.class.find_plant id
-#       raise RuntimeError, "Unknown plant id: #{id}" unless plant
-#     end
-#   end
 end
 
 module DFStock
@@ -612,11 +659,11 @@ module DFStock
   module FoodMod
     extend Scaffold
     add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
-  #   add_array(Meat, :meat)
-  #   add_array(Fish, :fish)
-  #   add_array(UnpreparedFish, :unprepared_fish)
+    add_array(Meat, :meat)
+    add_array(Fish, :fish)
+    add_array(UnpreparedFish, :unprepared_fish)
     add_array(Egg, :egg)
-  #   add_array(PlantProduct, :plants)
+    add_array(PlantProduct, :plants)
   # # add_array(DrinkPlant, :drink_plant)
   # # add_array(DrinkAnimal, :drink_animal)
   # # add_array(CheesePlant, :cheese_plant)
