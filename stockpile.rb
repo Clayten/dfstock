@@ -421,22 +421,9 @@ module DFStock
 
   class Plant < Thing
     def self.plant_raws ; df.world.raws.plants.all end
-
     def self.plant_indexes ; (0 ... plant_raws.length).to_a end
     def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
     def self.index_translation ; plant_indexes end
-
-    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.is_plantproduct? ; a } } end
-    def self.seed_indexes         ; cache(:seeds)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.has_seed? ; a } } end
-    def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
-
-    def mill?       ; material_ids.include? 'MILL' end
-    def drink?      ; material_ids.include? 'DRINK' end
-    def wood?       ; material_ids.include? 'WOOD' end
-    def seed?       ; material_ids.include? 'SEED' end
-    def leaf?       ; material_ids.include? 'LEAF' end
-    def thread?     ; material_ids.include? 'THREAD' end
-    def structural? ; material_ids.include? 'STRUCTURAL' end
 
     def mat_mill       ; materials.find {|id| id == 'MILL' } end
     def mat_drink      ; materials.find {|id| id == 'DRINK' } end
@@ -445,6 +432,14 @@ module DFStock
     def mat_leaf       ; materials.find {|id| id == 'LEAF' } end
     def mat_thread     ; materials.find {|id| id == 'THREAD' } end
     def mat_structural ; materials.find {|id| id == 'STRUCTURAL' } end
+
+    def mill?       ; !!mat_mill end
+    def drink?      ; !!mat_drink end
+    def wood?       ; !!mat_wood end
+    def seed?       ; !!mat_seed end
+    def leaf?       ; !!mat_leaf end
+    def thread?     ; !!mat_thread end
+    def structural? ; !!mat_structural end
 
     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
@@ -459,25 +454,15 @@ module DFStock
 
     def growths ; raw.growths end
     def growth_ids ; growths.map(&:id) end
-
-    def is_plantproduct? ; winter? || spring? || summer? || autumn? end
-    def has_seed?  ; material_ids.include? 'SEED' end
-    def has_fruit? ; growth_ids.include? 'FRUIT' end
-    def has_bud?   ; growth_ids.include? 'BUD' end
-    def has_leaf?  ; growth_ids.include? 'LEAVES' end
+    def grows_fruit? ; growth_ids.include? 'FRUIT' end
+    def grows_bud?   ; growth_ids.include? 'BUD' end
+    def grows_leaf?  ; growth_ids.include? 'LEAVES' end # FIXME: Does this mean edible leaf? Add another check?
 
     def winter? ; raw.flags[:WINTER] end
     def spring? ; raw.flags[:SPRING] end
     def summer? ; raw.flags[:SUMMER] end
     def autumn? ; raw.flags[:AUTUMN] end
-
-    def fruitleaf_growths ; growths.select {|g| df::MaterialInfo.new(g.mat_type, g.mat_index).material.food_mat_index[:Leaf] != -1 } end
-    def self.fruitleaf_growths
-      cache(:fruitleaf_growths) { plants.map {|pl| pl.fruitleaf_growths }.flatten.sort_by {|g| m = M g.mat_type, g.mat_index ; m.food_mat_index[:Leaf] } }
-    end
-    def fruitleaf_growth_ids
-      fruitleaf_growths.map(&:id)
-    end
+    def crop? ; winter? || spring? || summer? || autumn? end
 
     def raw ; self.class.plant_raws[plant_index] end
     def token ; raw.id end
@@ -502,7 +487,7 @@ module DFStock
   #  Seeds
 #   (CheesePlant, :cheese_plant)
 #   (CheeseAnimal, :cheese_animal)
-#   (PowderPlant, :powder_plant)
+  # PowderPlant
 #   (PowderCreature, :powder_creature)
 #   (Glob, :glob)
 #   (GlobPaste, :glob_paste)
@@ -511,8 +496,13 @@ module DFStock
 #   (LiquidAnimal, :liquid_animal)
 #   (LiquidMisc, :liquid_misc)
 
+
+  class Glob < Plant
+  end
+
   class PlantProduct < Plant
-    def self.plantproducts ; plantproduct_indexes.map {|i| PlantProduct.new i } end
+    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
+    def self.plantproducts ; plantproduct_indexes.each_index.map {|i| PlantProduct.new i } end
     def self.index_translation ; plantproduct_indexes end
   
     def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
@@ -525,12 +515,33 @@ module DFStock
     end
   end
 
+  class PowderPlant < Plant
+    def self.powderplant_indexes  ; cache(:powderplants)  { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
+    def self.powderplants ; powderplant_indexes.each_index.map {|i| PowderPlant.new i } end
+    def self.index_translation ; powderplant_indexes end
+
+    def plant_index ; self.class.powderplant_indexes[powderplant_index] end
+    def to_s ; super + " powderplant_index=#{powderplant_index}" end
+
+    attr_reader :powderplant_index
+    def initialize index, link: nil
+      @powderplant_index = index
+      super plant_index, link: link
+    end
+  end
+
   # NOTE: Plants can be in here multiple times, ex Caper -> caper fruit, caper, caper berry.
   # NOTE: Index is leaves_index, not a sparse index into plants
   class FruitLeaf < Plant
     def self.fruitleaf_indexes ; (0 ... fruitleaf_growths.length).to_a end
     def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
     def self.index_translation ; fruitleaf_indexes end
+
+    def fruitleaf_growths ; growths.select {|g| df::MaterialInfo.new(g.mat_type, g.mat_index).material.food_mat_index[:Leaf] != -1 } end
+    def self.fruitleaf_growths
+      cache(:fruitleaf_growths) { plants.map {|pl| pl.fruitleaf_growths }.flatten.sort_by {|g| m = M g.mat_type, g.mat_index ; m.food_mat_index[:Leaf] } }
+    end
+
     def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
     def raw ; material_info.plant end
     def material_info ; MI growth.mat_type, growth.mat_index end
@@ -546,6 +557,7 @@ module DFStock
 
   # NOTE: Index is seed_index, not a sparse index into plants
   class Seed < Plant
+    def self.seed_indexes         ; cache(:seeds)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.seed? ; a } } end
     def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
     def self.index_translation ; seed_indexes end
 
@@ -575,6 +587,7 @@ module DFStock
 
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
+    def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
     def self.trees ; plants.select {|t| t.tree? } end
     def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
     def self.index_translation ; tree_indexes end
@@ -664,19 +677,19 @@ module DFStock
     add_array(UnpreparedFish, :unprepared_fish)
     add_array(Egg, :egg)
     add_array(PlantProduct, :plants)
-  # # add_array(DrinkPlant, :drink_plant)
-  # # add_array(DrinkAnimal, :drink_animal)
+  # add_array(DrinkPlant, :drink_plant)
+  # add_array(DrinkAnimal, :drink_animal)
   # # add_array(CheesePlant, :cheese_plant)
   # # add_array(CheeseAnimal, :cheese_animal)
     add_array(Seed, :seeds)
     add_array(FruitLeaf, :leaves)
-  #   add_array(PowderPlant, :powder_plant)
+    add_array(PowderPlant, :powder_plant)
   # # add_array(PowderCreature, :powder_creature)
-  # # add_array(Glob, :glob)
-  # # add_array(GlobPaste, :glob_paste)
-  # # add_array(GlobPressed, :glob_pressed)
-  # # add_array(LiquidPlant, :liquid_plant)
-  # # add_array(LiquidAnimal, :liquid_animal)
+  # add_array(Glob, :glob)
+  # add_array(GlobPaste, :glob_paste)
+  # add_array(GlobPressed, :glob_pressed)
+  # add_array(LiquidPlant, :liquid_plant)
+  # add_array(LiquidAnimal, :liquid_animal)
   # # add_array(LiquidMisc, :liquid_misc)
   end
 
