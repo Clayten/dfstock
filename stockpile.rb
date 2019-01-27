@@ -71,22 +71,23 @@ module DFStock
 
   module Material
     def material_ids   ; materials.map &:id end
-    def material_flags ; Hash[materials.inject({}) {|a,b| a.merge Hash[b.flags.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def material_flags ms = materials ; active_flags [*ms].map(&:flags) end
   end
 
   class Thing
     include Raw
     include Material
-    def self.material_info id, cat ; df::MaterialInfo.new id, cat end
-    def self.material id, cat ; material_info(id, cat).material end # FIXME How to create the material directly?
+    def self.material_info cat, id ; df::MaterialInfo.new cat, id end
+    def self.material cat, id ; material_info(cat, id).material end # FIXME How to create the material directly?
 
     def self.mat_table ; df.world.raws.mat_table end
     def self.organic_category cat_name ; cat_name.is_a?(Numeric) ? cat_name : DFHack::OrganicMatCategory::NUME[cat_name] end
     def self.organic_types ; cache(:organics) { mat_table.organic_types.each_with_index.map {|ot,i| ot.zip mat_table.organic_indexes[i] } } end
-    def self.organic cat_index, cat_name # eg: (34, :Fish) -> Creature_ID, Caste_ID
+    def self.organic cat_name, index # eg: (34, :Fish) -> Creature_ID, Caste_ID
       cat_num = organic_category cat_name
       raise "Unknown category '#{cat_name.inspect}'" unless cat_num
-      organic_types[cat_num][cat_index]
+      organic_types[cat_num][index]
     end
 
     private
@@ -122,7 +123,7 @@ module DFStock
     def self.inspect_cache ; @@cache end
 
     def token ; 'NONE' end
-    def to_s ; "#{self.class.name} linked=#{!!link}#{" enabled=#{!!enabled?}" if link} token=#{token} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{!!link}#{" enabled=#{!!enabled?}" if link} token=#{token.inspect} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
     attr_reader :index, :link
@@ -285,12 +286,17 @@ module DFStock
     def caste_index ; @caste_index ||= 0 end
     def caste_raw ; raw.caste[caste_index] end
 
+    def token ; "#{caste_raw.caste_name.first}" end
     def to_s ; "#{super} creature_index=#{creature_index}" end
 
     def is_creature?         ; cache(:creature,  creature_index) { !flags[:EQUIPMENT_WAGON] } end
     def is_stockpile_animal? ; cache(:stockpile, creature_index) { token !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ } end
 
-    def edible?           ; true end # What won't they eat? Lol! FIXME?
+    # def edible?           ; true end # What won't they eat? Lol! FIXME?
+    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
+    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
+    def edible?         ; edible_cooked? || edible_raw? end
+
     def lays_eggs?        ; cache(:eggs,    creature_index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
     def grazer?           ; cache(:grazer,  creature_index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
     def produces_honey?   ; cache(:honey,   creature_index) { raw.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
@@ -325,7 +331,7 @@ module DFStock
     def self.meat_category ; organic_category :Meat end
     def self.meat_types ; organic_types[meat_category] end
     def self.meat_indexes ; (0 ... meat_types.length).to_a end
-    def self.meat_materials ; cache(:meat_materials) { meat_types.map {|i,c| material_info i, c } } end
+    def self.meat_materials ; cache(:meat) { meat_types.map {|c,i| material_info c, i } } end
     def self.meats ; meat_indexes.each_index.map {|i| Meat.new i } end
     def self.index_translation ; meat_indexes ; end
 
@@ -334,7 +340,7 @@ module DFStock
     def material_info ; self.class.meat_materials[meat_index] end
     def material ; material_info.material end
     def raw ; material_info.mode == :Creature ? material_info.creature : material_info.plant end # NOTE: Not all meats are from animals.
-    def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2]} #{material.meat_name.first}" end
+    def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
     def to_s ; "#{super} @meat_index=#{index}" end
 
     attr_reader :meat_index
@@ -396,8 +402,8 @@ module DFStock
 
   # Egg indexes are creatures, there is no one egg material
   class Egg < Creature
-    def self.egg_category ; DFHack::OrganicMatCategory::NUME[:Eggs] end
-    def self.egg_types ; df.world.raws.mat_table.organic_types[DFHack::OrganicMatCategory::NUME[:Eggs]] end
+    def self.egg_category ; organic_category :Eggs end
+    def self.egg_types ; organic_types[egg_category] end
     def self.egg_indexes ; (0 ... egg_types.length).to_a end
     def self.eggs ; egg_indexes.each_index.map {|i| Egg.new i } end
     def self.index_translation ; egg_indexes end
@@ -413,9 +419,75 @@ module DFStock
     def index ; egg_index end
     def initialize index, link: nil
       @egg_index = index
-      # super creature_index, link: link # Passthrough
       super creature_index, link: link # Passthrough
       @index = egg_index
+    end
+  end
+
+  class CreatureDrink < Creature
+    def self.creaturedrink_category ; organic_category :CreatureDrink end
+    def self.creaturedrink_types ; organic_types[creaturedrink_category] end
+    def self.creaturedrink_material_infos ; creaturedrink_types.map {|(c,i)| material_info c, i } end
+    def self.creaturedrink_indexes ; (0 ... creaturedrink_types.length).to_a end
+    def self.creaturedrinks ; creaturedrink_indexes.each_index.map {|i| CreatureDrink.new i } end
+    def self.index_translation ; creaturedrink_indexes end
+
+    def material_info ; self.class.creaturedrink_material_infos[creaturedrink_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; "#{material.state_name[:Liquid]}" end
+    def to_s ; super + " creaturedrink_index=#{creaturedrink_index}" end
+
+    attr_reader :creaturedrink_index
+    def initialize index, link: nil
+      @creaturedrink_index = index
+      super index, link: link
+    end
+  end
+
+  class Fat < Creature
+    def self.fat_category ; organic_category :Glob end
+    def self.fat_types ; organic_types[fat_category] end
+    def self.fat_material_infos ; cache(:fat) { fat_types.map {|(t,i)| material_info t, i } } end
+    def self.fat_indexes ; (0 ... fat_types.length).to_a end
+    def self.fats ; fat_indexes.each_index.map {|i| Fat.new i } end
+    def self.index_translation ; fat_indexes end
+
+    def material_info ; self.class.fat_material_infos[fat_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+
+    def token ; "#{raw.name.first} #{material.state_name[:Solid]}" end
+    def to_s ; super + " fat_index=#{fat_index}" end
+
+    attr_reader :fat_index
+    def initialize index, link: nil
+      @fat_index = index
+      super index, link: link
+    end
+  end
+
+  class CreatureExtract < Creature
+    def self.creatureextract_category ; organic_category :CreatureLiquid end
+    def self.creatureextract_types ; organic_types[creatureextract_category] end
+    def self.creatureextract_material_infos ; cache(:creatureextracts) { creatureextract_types.map {|(c,i)| material_info c, i } } end
+    def self.creatureextract_indexes ; (0 ... creatureextract_types.length).to_a end
+    def self.creatureextracts ; creatureextract_indexes.each_index.map {|i| CreatureExtract.new i } end
+    def self.index_translation ; creatureextract_indexes end
+
+    def material_info ; self.class.creatureextract_material_infos[creatureextract_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; super + " #{material.state_name[:Liquid]}" end
+    def to_s ; super + " creatureextract_index=#{creatureextract_index}" end
+
+    attr_reader :creatureextract_index
+    def initialize index, link: nil
+      @creatureextract_index = index
+      super index, link: link
     end
   end
 
@@ -481,24 +553,21 @@ module DFStock
   # UnpreparedFish
   # Egg
   # PlantProduct
-#   (DrinkPlant, :drink_plant)
-#   (DrinkAnimal, :drink_animal)
-  #  FruitLeaf
-  #  Seeds
-#   (CheesePlant, :cheese_plant)
-#   (CheeseAnimal, :cheese_animal)
+  # PlantDrink
+#   (CreatureDrink
+  # FruitLeaf
+  # Seeds
+# # CheesePlant # Empty?
+#   (CheeseAnimal
   # PowderPlant
-#   (PowderCreature, :powder_creature)
-#   (Glob, :glob)
-#   (GlobPaste, :glob_paste)
-#   (GlobPressed, :glob_pressed)
-#   (LiquidPlant, :liquid_plant)
-#   (LiquidAnimal, :liquid_animal)
-#   (LiquidMisc, :liquid_misc)
+# # PowderCreature # Empty?
+  # Fat
+  # Paste
+  # Pressed
+  # PlantExtract
+  # CreatureExtract
+#   (MiscLiquid, :liquid_misc)
 
-
-  class Glob < Plant
-  end
 
   class PlantProduct < Plant
     def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
@@ -512,6 +581,28 @@ module DFStock
     def initialize index, link: nil
       @plantproduct_index = index
       super plant_index, link: link
+    end
+  end
+
+  class PlantDrink < Plant
+    def self.plantdrink_category ; organic_category :PlantDrink end
+    def self.plantdrink_types ; organic_types[plantdrink_category] end
+    def self.plantdrink_material_infos ; plantdrink_types.map {|(c,i)| material_info c, i } end
+    def self.plantdrink_indexes ; (0 ... plantdrink_types.length).to_a end
+    def self.plantdrinks ; plantdrink_indexes.each_index.map {|i| PlantDrink.new i } end
+    def self.index_translation ; plantdrink_indexes end
+
+    def material_info ; self.class.plantdrink_material_infos[plantdrink_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.plant end
+    def token ; "#{material.state_name[:Liquid]}" end
+    def to_s ; super + " plantdrink_index=#{plantdrink_index}" end
+
+    attr_reader :plantdrink_index
+    def initialize index, link: nil
+      @plantdrink_index = index
+      super index, link: link
     end
   end
 
@@ -533,7 +624,10 @@ module DFStock
   # NOTE: Plants can be in here multiple times, ex Caper -> caper fruit, caper, caper berry.
   # NOTE: Index is leaves_index, not a sparse index into plants
   class FruitLeaf < Plant
-    def self.fruitleaf_indexes ; (0 ... fruitleaf_growths.length).to_a end
+    def self.fruitleaf_category ; organic_category :Leaf end
+    def self.fruitleaf_types ; organic_types[fruitleaf_category] end
+    def self.fruitleaf_material_infos ; fruitleaf_types.map {|(t,i)| material_info t, i } end
+    def self.fruitleaf_indexes ; (0 ... fruitleaf_types.length).to_a end
     def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
     def self.index_translation ; fruitleaf_indexes end
 
@@ -544,9 +638,9 @@ module DFStock
 
     def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
     def raw ; material_info.plant end
-    def material_info ; MI growth.mat_type, growth.mat_index end
+    def material_info ; self.class.fruitleaf_materials[fruitleaf_index] end
     def material ; material_info.material end
-    def growth ; self.class.fruitleaf_growths[fruitleaf_index] end
+    def growth ; self.class.fruitleaf_growths[fruitleaf_index] end # This plant might have two or more growths - find the correct one
     def token ; growth.name end
     attr_reader :fruitleaf_index
     def initialize index, link: nil
@@ -561,14 +655,81 @@ module DFStock
     def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
     def self.index_translation ; seed_indexes end
 
-    def material ; materials.find {|m| m.id == 'SEED' } end
+    def material ; mat_seed end
     def plant_index ; self.class.seed_indexes[seed_index] end
     def index ; seed_index end
     def to_s ; super + " seed_index=#{seed_index}" end
+
     attr_reader :seed_index
     def initialize index, link: nil
       @seed_index = index
       super self.class.index_translation[index], link: link # Passthrough - different number than parent class
+    end
+  end
+
+  class Paste < Plant
+    def self.paste_category ; organic_category :Paste end
+    def self.paste_types ; organic_types[paste_category] end
+    def self.paste_material_infos ; paste_types.map {|(c,i)| material_info c, i } end
+    def self.paste_indexes ; (0 ... paste_types.length).to_a end
+    def self.pastes ; paste_indexes.each_index.map {|i| Paste.new i } end
+    def self.index_translation ; paste_indexes end
+
+    def material_info ; self.class.paste_material_infos[paste_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.plant end
+    def token ; "#{material.state_name[:Paste]}" end
+    def to_s ; super + " paste_index=#{paste_index}" end
+
+    attr_reader :paste_index
+    def initialize index, link: nil
+      @paste_index = index
+      super index, link: link
+    end
+  end
+
+  class Pressed < Plant
+    def self.pressed_category ; organic_category :Pressed end
+    def self.pressed_types ; organic_types[pressed_category] end
+    def self.pressed_material_infos ; pressed_types.map {|(c,i)| material_info c, i } end
+    def self.pressed_indexes ; (0 ... pressed_types.length).to_a end
+    def self.presseds ; pressed_indexes.each_index.map {|i| Pressed.new i } end
+    def self.index_translation ; pressed_indexes end
+
+    def material_info ; self.class.pressed_material_infos[pressed_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.mode == :Plant ? material_info.plant : material_info.creature end # Not all pressings are plants
+    def token ; "#{material.state_name[:Pressed]}" end
+    def to_s ; super + " pressed_index=#{pressed_index}" end
+
+    attr_reader :pressed_index
+    def initialize index, link: nil
+      @pressed_index = index
+      super index, link: link
+    end
+  end
+
+  class PlantExtract < Plant
+    def self.plantliquid_category ; organic_category :PlantLiquid end
+    def self.plantliquid_types ; organic_types[plantliquid_category] end
+    def self.plantliquid_material_infos ; plantliquid_types.map {|(c,i)| material_info c, i } end
+    def self.plantliquid_indexes ; (0 ... plantliquid_types.length).to_a end
+    def self.plantliquids ; plantliquid_indexes.each_index.map {|i| PlantExtract.new i } end
+    def self.index_translation ; plantliquid_indexes end
+
+    def material_info ; self.class.plantliquid_material_infos[plantliquid_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.plant end
+    def token ; "#{material.state_name[:Liquid]}" end
+    def to_s ; super + " plantliquid_index=#{plantliquid_index}" end
+
+    attr_reader :plantliquid_index
+    def initialize index, link: nil
+      @plantliquid_index = index
+      super index, link: link
     end
   end
 
@@ -685,12 +846,12 @@ module DFStock
     add_array(FruitLeaf, :leaves)
     add_array(PowderPlant, :powder_plant)
   # # add_array(PowderCreature, :powder_creature)
-  # add_array(Glob, :glob)
-  # add_array(GlobPaste, :glob_paste)
-  # add_array(GlobPressed, :glob_pressed)
-  # add_array(LiquidPlant, :liquid_plant)
-  # add_array(LiquidAnimal, :liquid_animal)
-  # # add_array(LiquidMisc, :liquid_misc)
+    add_array(Fat, :fat, :glob)
+    add_array(Paste, :paste, :glob_paste)
+    add_array(Pressed, :pressed, :glob_pressed)
+    add_array(PlantExtract, :plant_extract, :liquid_plant)
+    add_array(CreatureExtract, :animal_extract, :liquid_animal)
+  # add_array(MiscLiquid, :misc_liquid, :liquid_misc)
   end
 
   module FurnitureMod
