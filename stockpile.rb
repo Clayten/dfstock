@@ -446,6 +446,50 @@ module DFStock
     end
   end
 
+  class CreatureCheese < Creature
+    def self.creaturecheese_category ; organic_category :CreatureCheese end
+    def self.creaturecheese_types ; organic_types[creaturecheese_category] end
+    def self.creaturecheese_material_infos ; creaturecheese_types.map {|(c,i)| material_info c, i } end
+    def self.creaturecheese_indexes ; (0 ... creaturecheese_types.length).to_a end
+    def self.creaturecheeses ; creaturecheese_indexes.each_index.map {|i| CreatureCheese.new i } end
+    def self.index_translation ; creaturecheese_indexes end
+
+    def material_info ; self.class.creaturecheese_material_infos[creaturecheese_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; "#{material.state_name[:Solid]}" end
+    def to_s ; super + " creaturecheese_index=#{creaturecheese_index}" end
+
+    attr_reader :creaturecheese_index
+    def initialize index, link: nil
+      @creaturecheese_index = index
+      super index, link: link
+    end
+  end
+
+  class CreaturePowder < Creature # NOTE: Empty category
+    def self.creaturepowder_category ; organic_category :CreaturePowder end
+    def self.creaturepowder_types ; organic_types[creaturepowder_category] end
+    def self.creaturepowder_material_infos ; creaturepowder_types.map {|(c,i)| material_info c, i } end
+    def self.creaturepowder_indexes ; (0 ... creaturepowder_types.length).to_a end
+    def self.creaturepowders ; creaturepowder_indexes.each_index.map {|i| CreaturePowder.new i } end
+    def self.index_translation ; creaturepowder_indexes end
+
+    def material_info ; self.class.creaturepowder_material_infos[creaturepowder_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; "#{material.state_name[:Solid]}" end
+    def to_s ; super + " creaturepowder_index=#{creaturepowder_index}" end
+
+    attr_reader :creaturepowder_index
+    def initialize index, link: nil
+      @creaturepowder_index = index
+      super index, link: link
+    end
+  end
+
   class Fat < Creature
     def self.fat_category ; organic_category :Glob end
     def self.fat_types ; organic_types[fat_category] end
@@ -547,28 +591,6 @@ module DFStock
     end
   end
 
-# Food Classes
-  # Meat
-  # Fish
-  # UnpreparedFish
-  # Egg
-  # PlantProduct
-  # PlantDrink
-#   (CreatureDrink
-  # FruitLeaf
-  # Seeds
-# # CheesePlant # Empty?
-#   (CheeseAnimal
-  # PowderPlant
-# # PowderCreature # Empty?
-  # Fat
-  # Paste
-  # Pressed
-  # PlantExtract
-  # CreatureExtract
-#   (MiscLiquid, :liquid_misc)
-
-
   class PlantProduct < Plant
     def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
     def self.plantproducts ; plantproduct_indexes.each_index.map {|i| PlantProduct.new i } end
@@ -606,17 +628,39 @@ module DFStock
     end
   end
 
-  class PowderPlant < Plant
-    def self.powderplant_indexes  ; cache(:powderplants)  { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
-    def self.powderplants ; powderplant_indexes.each_index.map {|i| PowderPlant.new i } end
-    def self.index_translation ; powderplant_indexes end
+  class PlantCheese < Plant # NOTE: Empty category
+    def self.plantcheese_category ; organic_category :PlantCheese end
+    def self.plantcheese_types ; organic_types[plantcheese_category] end
+    def self.plantcheese_material_infos ; plantcheese_types.map {|(c,i)| material_info c, i } end
+    def self.plantcheese_indexes ; (0 ... plantcheese_types.length).to_a end
+    def self.plantcheeses ; plantcheese_indexes.each_index.map {|i| PlantCheese.new i } end
+    def self.index_translation ; plantcheese_indexes end
 
-    def plant_index ; self.class.powderplant_indexes[powderplant_index] end
-    def to_s ; super + " powderplant_index=#{powderplant_index}" end
+    def material_info ; self.class.plantcheese_material_infos[plantcheese_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.plant end
+    def token ; "#{material.state_name[:Liquid]}" end
+    def to_s ; super + " plantcheese_index=#{plantcheese_index}" end
 
-    attr_reader :powderplant_index
+    attr_reader :plantcheese_index
     def initialize index, link: nil
-      @powderplant_index = index
+      @plantcheese_index = index
+      super index, link: link
+    end
+  end
+
+  class PlantPowder < Plant
+    def self.plantpowder_indexes  ; cache(:plantpowders)  { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
+    def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
+    def self.index_translation ; plantpowder_indexes end
+
+    def plant_index ; self.class.plantpowder_indexes[plantpowder_index] end
+    def to_s ; super + " plantpowder_index=#{plantpowder_index}" end
+
+    attr_reader :plantpowder_index
+    def initialize index, link: nil
+      @plantpowder_index = index
       super plant_index, link: link
     end
   end
@@ -833,25 +877,25 @@ module DFStock
   module FoodMod
     extend Scaffold
     add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
-    add_array(Meat, :meat)
-    add_array(Fish, :fish)
-    add_array(UnpreparedFish, :unprepared_fish)
-    add_array(Egg, :egg)
-    add_array(PlantProduct, :plants)
-  # add_array(DrinkPlant, :drink_plant)
-  # add_array(DrinkAnimal, :drink_animal)
-  # # add_array(CheesePlant, :cheese_plant)
-  # # add_array(CheeseAnimal, :cheese_animal)
-    add_array(Seed, :seeds)
-    add_array(FruitLeaf, :leaves)
-    add_array(PowderPlant, :powder_plant)
-  # # add_array(PowderCreature, :powder_creature)
-    add_array(Fat, :fat, :glob)
-    add_array(Paste, :paste, :glob_paste)
-    add_array(Pressed, :pressed, :glob_pressed)
-    add_array(PlantExtract, :plant_extract, :liquid_plant)
-    add_array(CreatureExtract, :animal_extract, :liquid_animal)
-  # add_array(MiscLiquid, :misc_liquid, :liquid_misc)
+    add_array(Meat,             :meat)
+    add_array(Fish,             :fish)
+    add_array(UnpreparedFish,   :unprepared_fish)
+    add_array(Egg,              :egg)
+    add_array(PlantProduct,     :plants)
+    add_array(PlantDrink,       :plant_drink,     :drink_plant)
+    add_array(CreatureDrink,    :animal_drink,    :drink_animal)
+    add_array(PlantCheese,      :plant_cheese,    :cheese_plant)
+    add_array(CreatureCheese,   :creature_cheese, :cheese_animal)
+    add_array(Seed,             :seeds)
+    add_array(FruitLeaf,        :leaves)
+    add_array(PlantPowder,      :plant_powder,    :powder_plant)
+    add_array(CreaturePowder,   :animal_powder,   :powder_creature)
+    add_array(Fat,              :fat,             :glob)
+    add_array(Paste,            :paste,           :glob_paste)
+    add_array(Pressed,          :pressed,         :glob_pressed)
+    add_array(PlantExtract,     :plant_extract,   :liquid_plant)
+    add_array(CreatureExtract,  :animal_extract,  :liquid_animal)
+  # add_array(MiscLiquid,       :misc_liquid,     :liquid_misc)
   end
 
   module FurnitureMod
