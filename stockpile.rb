@@ -1,12 +1,12 @@
 module DFStock
   module Scaffold
-    # This runs at inclusion into the FooMod classes
+    # This runs at inclusion into the X_Mod classes
     def self.extended klass
       # p [:ext, klass]
       klass.instance_variable_set(:@features, []) # Initialize the array, eliminate old definitions from previous loads
     end
 
-    # This runs during class-definition at load-time
+    # These run during class-definition at load-time
     def add_array stockklass, desired_name, actual_name = desired_name
       desired_name, actual_name = desired_name.to_sym, actual_name
       array = [:array, desired_name, actual_name, stockklass]
@@ -46,7 +46,7 @@ module DFStock
           flags_array_name = original_name || actual_name
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
-            list = stockklass.index_translation
+            list = stockklass.index_translation # This is the reason this is a consistent class method
             list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
             }
@@ -70,9 +70,9 @@ module DFStock
   end
 
   module Material
-    def material_ids   ; materials.map &:id end
+    def material_ids ; materials.map &:id end
     def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-    def material_flags ms = materials ; active_flags [*ms].map(&:flags) end
+    def material_flags ms = materials ; ms = [*ms] ; cache(:material_flags, *ms.map(&:id)) { active_flags [*ms].map(&:flags) } end
   end
 
   class Thing
@@ -128,10 +128,45 @@ module DFStock
 
     attr_reader :index, :link
     def initialize index, link: nil
+      raise "No index provided - invalid stockthing creation" unless index
       @index = index # The index into the 'link'ed array for the thing
-      raise "No index provided" unless index
-      @link     = link
-      @@cache ||= {}
+      @link  = link
+    end
+  end
+
+  class Builtin < Thing
+    def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a end
+    def self.builtin_indexes ; builtin_materials.each_with_index.reject {|x,i| !x }.map {|v,i| i } end
+    def self.builtins ; builtin_indexes.each_index.map {|i| Builtin.new i } end
+    def self.index_translation ; builtin_indexes end
+
+    def index ; self.class.builtin_indexes[builtin_index] end
+    def material ; self.class.builtin_materials[index] end
+
+    def is_glass? ; material.flags[:IS_GLASS] end
+
+    def to_s ; super + " builtin_index=#{builtin_index}" end
+    def token ; material.state_name[:Solid] end
+
+    attr_reader :builtin_index
+    def initialize index, link: nil
+      @builtin_index = index
+      super
+    end
+  end
+
+  class Glass < Builtin
+    def self.glass_indexes ; cache(:glasses) { builtins.each_with_index.inject([]) {|a,(m,i)| a << i if m.is_glass? ; a } } end
+    def self.glasses ; glass_indexes.each_index.map {|i| Glass.new i } end
+    def self.index_translation ; glass_indexes end
+
+    def builtin_index ; self.class.glass_indexes[glass_index] end
+    def to_s ; super + " glass_index=#{glass_index}" end
+
+    attr_reader :glass_index
+    def initialize index, link: nil
+      @glass_index = index
+      super builtin_index, link: link
     end
   end
 
@@ -144,35 +179,34 @@ module DFStock
     def raw ; self.class.inorganic_raws[index] end
     def materials ; [raw.material] end
 
-    def token ; raw.id end
+    def token ; material.state_name[:Solid] end
 
-    def is_ore?
-      raw.flags[:METAL_ORE]
-    end
+    def is_gem? ; material.flags[:IS_GEM] end
+    def is_stone? ; material.flags[:IS_STONE] end
+    def is_metal? ; material.flags[:IS_METAL] end
+
+    def is_soil? ; raw.flags[:SOIL] end
+    def is_ore? ; raw.flags[:METAL_ORE] end
 
     def is_economic_stone?
-      !raw.economic_uses.empty? &&
-      !raw.flags[:METAL_ORE] &&
-      !raw.flags[:SOIL] &&
-      !material.flags[:IS_METAL]
+      !is_ore? &&
+      !is_metal? &&
+      !soil? &&
+      !raw.economic_uses.empty?
     end
 
     def is_clay?
-       raw.id =~ /clay/i &&
+       raw.id =~ /CLAY/ &&
       !raw.flags[:AQUIFER] &&
-      !material.flags[:IS_STONE]
+      !is_stone?
     end
 
     def is_other_stone?
-       material.flags[:IS_STONE] &&
-      !material.flags[:NO_STONE_STOCKPILE] &&
+       is_stone? &&
       !is_ore? &&
       !is_economic_stone? &&
-      !is_clay?
-    end
-
-    def is_metal?
-      material.flags[:IS_METAL]
+      !is_clay? &&
+      !material.flags[:NO_STONE_STOCKPILE]
     end
 
     def initialize index, link: nil
@@ -195,15 +229,45 @@ module DFStock
     end
   end
 
-  class Stone < Inorganic
+  class Gem < Inorganic
+    def self.gem_indexes ; cache(:gem) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_gem? ; a } } end
+    def self.gems ; gem_indexes.each_index.map {|i| Gem.new i } end
+    def self.index_translation ; gem_indexes end
+
+    def stone_index ; self.class.gem_indexes[gem_index] end
+    def to_s ; super + " gem_index=#{gem_index}" end
+
+    attr_reader :gem_index
+    def initialize index, link: nil
+      @gem_index = index
+      super stone_index, link: link
+    end
+  end
+
+  class CutStone < Inorganic # NOTE: A Different definition of stone than the stone stockpile
+    def self.cutstone_indexes ; cache(:cutstone) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_stone? ; a } } end
+    def self.cutstones ; cutstone_indexes.each_index.map {|i| CutStone.new i } end
+    def self.index_translation ; cutstone_indexes end
+
+    def stone_index ; self.class.cutstone_indexes[cutstone_index] end
+    def to_s ; super + " cutstone_index=#{cutstone_index}" end
+
+    attr_reader :cutstone_index
+    def initialize index, link: nil
+      @cutstone_index = index
+      super stone_index, link: link
+    end
+  end
+
+  class Stone < Inorganic # NOTE: Not IS_STONE, but members of the stone stockpile
     def self.stone_indexes ; (ore_indexes + economic_indexes + other_indexes + clay_indexes).sort end
     def self.stones ; stone_indexes.each_index.map {|i| Stone.new i } end
     def self.index_translation ; stone_indexes end
 
-    def self.ore_indexes      ; cache(:org)        { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
-    def self.economic_indexes ; cache(:inorganics) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
-    def self.other_indexes    ; cache(:other)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
-    def self.clay_indexes     ; cache(:clay)       { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
+    def self.ore_indexes      ; cache(:ore)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
+    def self.economic_indexes ; cache(:economic) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
+    def self.other_indexes    ; cache(:other)    { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
+    def self.clay_indexes     ; cache(:clay)     { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
 
     def inorganic_index ; self.class.stone_indexes[stone_index] end
 
@@ -278,29 +342,35 @@ module DFStock
 
     def self.find_creature_by_organic index, cat_name ; creature_index, caste_num = organic(index, cat_name) ; creature_raws[creature_index].caste[caste_num] ; end
 
+    def self.find_creature_index raw ; creature_raws.index raw end
+
     def raw ; self.class.creature_raws[creature_index] end
     def flags ; raw.flags end
     def token ; raw.creature_id end
 
-    def sex_symbol ; "#{caste_index.zero? ? '♀' : '♂'}" end
+    def caste_symbol
+      {'QUEEN'   => '♀', 'FEMALE' => '♀', 'SOLDIER' => '♀', 'WORKER' => '♀',
+       'KING'    => '♂',   'MALE' => '♂', 'DRONE' => '♂',
+       'DEFAULT' => '?'
+      }[caste.caste_id]
+    end
     def caste_index ; @caste_index ||= 0 end
-    def caste_raw ; raw.caste[caste_index] end
+    def caste ; raw.caste[caste_index] end
 
-    def token ; "#{caste_raw.caste_name.first}" end
+    def token ; "#{caste.caste_name.first}" end
     def to_s ; "#{super} creature_index=#{creature_index}" end
 
-    def is_creature?         ; cache(:creature,  creature_index) { !flags[:EQUIPMENT_WAGON] } end
+    def is_creature?         ; cache(:creature,  creature_index) { raw.respond_to?(:creature_id) && !flags[:EQUIPMENT_WAGON] } end
     def is_stockpile_animal? ; cache(:stockpile, creature_index) { token !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ } end
 
-    # def edible?           ; true end # What won't they eat? Lol! FIXME?
-    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
-    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
-    def edible?         ; edible_cooked? || edible_raw? end
+    def edible_cooked?  ; cache(:edible_cooked?) { material_flags[:EDIBLE_COOKED] } end
+    def edible_raw?     ; cache(:edible_raw?)    { material_flags[:EDIBLE_RAW] } end
+    def edible?         ; cache(:edible?) { edible_cooked? || edible_raw? } end
 
     def lays_eggs?        ; cache(:eggs,    creature_index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
     def grazer?           ; cache(:grazer,  creature_index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
-    def produces_honey?   ; cache(:honey,   creature_index) { raw.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-    def provides_leather? ; cache(:leather, creature_index) { raw.material.any? {|mat| mat.id == 'LEATHER' } } end
+    def produces_honey?   ; cache(:honey,   creature_index) { materials.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
+    def provides_leather? ; cache(:leather, creature_index) { materials.any? {|mat| mat.id == 'LEATHER' } } end
 
     attr_reader :creature_index
     def initialize index, link: nil, caste: nil
@@ -313,7 +383,7 @@ module DFStock
   class Animal < Creature
     def self.animal_indexes ; cache(:animals) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if (c.is_creature? && c.is_stockpile_animal?) ; a } } end
     def self.animals ; animal_indexes.each_index.map {|i| Animal.new i } end
-    def self.index_translation ; animals_indexes end
+    def self.index_translation ; animal_indexes end
 
     def creature_index ; self.class.animal_indexes[animal_index] end
 
@@ -359,44 +429,42 @@ module DFStock
     def self.index_translation ; fish_indexes ; end
 
     def types ; self.class.fish_types end
-    def raws ; self.class.fish_raws end
+    def mat_index ; types[fish_index].first end
+    def mat_type  ; types[fish_index].last end
 
-    def mat_index ; types[index].first end
-    def mat_type  ; types[index].last end
-    def raw ; raws[index] end
-    def caste ; raw.caste[mat_type] end
-    def token ; "#{caste.caste_name.first}, #{sex_symbol}" end
+    def creature_index ; self.class.find_creature_index self.class.fish_raws[fish_index] end
+    def caste_index ; mat_type end
+    def token ; "#{caste.caste_name.first}, #{caste_symbol}" end
     def to_s ; "#{super} fish_index=#{fish_index}" end
 
     attr_reader :fish_index
     def initialize index, link: nil, caste: nil
       @fish_index = index
-      super index, link: link
+      super creature_index, link: link
     end
   end
 
-  class UnpreparedFish < Creature
-    def self.unprepared_fish_category ; organic_category :UnpreparedFish end
-    def self.unprepared_fish_types ; organic_types[unprepared_fish_category] end
-    def self.unprepared_fish_indexes ; (0 ... unprepared_fish_types.length).to_a end
-    def self.unprepared_fish_raws ; cache(:unprepared_fish) { unprepared_fish_types.map {|i,c| creature_raws[i] } } end
-    def self.unprepared_fish ; unprepared_fish_indexes.each_index.map {|i| UnpreparedFish.new i } end
-    def self.index_translation ; unprepared_fish_indexes ; end
+  class UnpreparedFish < Creature # TODO: Try basing off Fish
+    def self.unpreparedfish_category ; organic_category :UnpreparedFish end
+    def self.unpreparedfish_types ; organic_types[unpreparedfish_category] end
+    def self.unpreparedfish_indexes ; (0 ... unpreparedfish_types.length).to_a end
+    def self.unpreparedfish_raws ; cache(:unpreparedfish) { unpreparedfish_types.map {|i,c| creature_raws[i] } } end
+    def self.unpreparedfish ; unpreparedfish_indexes.each_index.map {|i| UnpreparedFish.new i } end
+    def self.index_translation ; unpreparedfish_indexes ; end
 
-    def types ; self.class.unprepared_fish_types end
-    def raws ; self.class.unprepared_fish_raws end
+    def types ; self.class.unpreparedfish_types end
+    def mat_index ; types[unpreparedfish_index].first end
+    def mat_type  ; types[unpreparedfish_index].last end
 
-    def mat_index ; types[index].first end
-    def mat_type  ; types[index].last end
-    def raw ; raws[index] end
-    def caste ; raw.caste[mat_type] end
-    def token ; "#{caste.caste_name.first}, #{caste_index.zero? ? '♀' : '♂'}" end
-    def to_s ; "#{super} unprepared_fish_index=#{unprepared_fish_index}" end
+    def creature_index ; self.class.find_creature_index self.class.unpreparedfish_raws[unpreparedfish_index] end
+    def caste_index ; mat_type end
+    def token ; "#{caste.caste_name.first}, #{caste_symbol}" end
+    def to_s ; "#{super} unpreparedfish_index=#{unpreparedfish_index}" end
 
-    attr_reader :unprepared_fish_index
+    attr_reader :unpreparedfish_index
     def initialize index, link: nil, caste: nil
-      @unprepared_fish_index = index
-      super
+      @unpreparedfish_index = index
+      super creature_index, link: link
     end
   end
 
@@ -535,11 +603,59 @@ module DFStock
     end
   end
 
+  class Leather < Creature
+    def self.leather_category ; organic_category :Leather end
+    def self.leather_types ; organic_types[leather_category] end
+    def self.leather_material_infos ; cache(:leathers) { leather_types.map {|(c,i)| material_info c, i } } end
+    def self.leather_indexes ; (0 ... leather_types.length).to_a end
+    def self.leathers ; leather_indexes.each_index.map {|i| Leather.new i } end
+    def self.index_translation ; leather_indexes end
+
+    def material_info ; self.class.leather_material_infos[leather_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; super + " #{material.state_name[:Solid]}" end
+    def to_s ; super + " leather_index=#{leather_index}" end
+
+    attr_reader :leather_index
+    def initialize index, link: nil
+      @leather_index = index
+      super index, link: link
+    end
+  end
+
+  class Parchment < Leather
+    def self.parchment_types ; leather_types end
+    def self.parchment_material_infos ; cache(:parchments) { parchment_types.map {|(c,i)| material_info c, i } } end
+    def self.parchment_indexes ; (0 ... parchment_types.length).to_a end
+    def self.parchments ; parchment_indexes.each_index.map {|i| Parchment.new i } end
+    def self.index_translation ; parchment_indexes end
+
+    def material_info ; self.class.parchment_material_infos[parchment_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.creature end
+    def token ; "#{raw.name.first.capitalize} Parchment Sheet" end
+    def to_s ; super + " parchment_index=#{parchment_index}" end
+
+    attr_reader :parchment_index
+    def initialize index, link: nil
+      @parchment_index = index
+      super index, link: link
+    end
+  end
+
   class Plant < Thing
+    def self.plant_category ; organic_category :Plants end
     def self.plant_raws ; df.world.raws.plants.all end
-    def self.plant_indexes ; (0 ... plant_raws.length).to_a end
+    def self.plant_types ; organic_types[plant_category] end
+    def self.plant_material_infos ; plant_types.map {|(c,i)| material_info c, i } end
     def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
+    def self.plant_indexes ; (0 ... plant_types.length).to_a end
     def self.index_translation ; plant_indexes end
+
+    def self.find_plant_index raw ; plant_raws.index raw end
 
     def mat_mill       ; materials.find {|id| id == 'MILL' } end
     def mat_drink      ; materials.find {|id| id == 'DRINK' } end
@@ -581,7 +697,7 @@ module DFStock
     def crop? ; winter? || spring? || summer? || autumn? end
 
     def raw ; self.class.plant_raws[plant_index] end
-    def token ; raw.id end
+    def token ; raw.name end
     def to_s ; super + " plant_index=#{plant_index}" end
 
     attr_reader :plant_index
@@ -666,7 +782,7 @@ module DFStock
   end
 
   # NOTE: Plants can be in here multiple times, ex Caper -> caper fruit, caper, caper berry.
-  # NOTE: Index is leaves_index, not a sparse index into plants
+  # NOTE: Index is fruitleaf_index, not a sparse index into plants
   class FruitLeaf < Plant
     def self.fruitleaf_category ; organic_category :Leaf end
     def self.fruitleaf_types ; organic_types[fruitleaf_category] end
@@ -715,10 +831,11 @@ module DFStock
     def self.paste_category ; organic_category :Paste end
     def self.paste_types ; organic_types[paste_category] end
     def self.paste_material_infos ; paste_types.map {|(c,i)| material_info c, i } end
-    def self.paste_indexes ; (0 ... paste_types.length).to_a end
+    def self.paste_indexes ; paste_material_infos.map {|mi| find_plant_index mi.plant } end
     def self.pastes ; paste_indexes.each_index.map {|i| Paste.new i } end
     def self.index_translation ; paste_indexes end
 
+    def plant_index ; self.class.paste_indexes[paste_index] end
     def material_info ; self.class.paste_material_infos[paste_index] end
     def material ; material_info.material end
     def material_flags ; material.flags end # Only look at this material
@@ -729,11 +846,33 @@ module DFStock
     attr_reader :paste_index
     def initialize index, link: nil
       @paste_index = index
-      super index, link: link
+      super plant_index, link: link
     end
   end
 
-  class Pressed < Plant
+  class Paper < Plant
+    def self.paper_types ; plant_types.select {|(t,i)| MI(t,i).plant.material.any? {|m| m.reaction_class.any? {|c| c =~ /PAPER/ } } } end
+    def self.paper_material_infos ; paper_types.map {|(c,i)| material_info c, i } end
+    def self.paper_indexes ; paper_material_infos.map {|mi| find_plant_index mi.plant } end
+    def self.papers ; paper_indexes.each_index.map {|i| Paper.new i } end
+    def self.index_translation ; paper_indexes end
+
+    def plant_index ; self.class.paper_indexes[paper_index] end
+    def material_info ; self.class.paper_material_infos[paper_index] end
+    def material ; material_info.material end
+    def material_flags ; material.flags end # Only look at this material
+    def raw ; material_info.plant end
+    def token ; "#{material.state_name[:Pressed]}" end
+    def to_s ; super + " paper_index=#{paper_index}" end
+
+    attr_reader :paper_index
+    def initialize index, link: nil
+      @paper_index = index
+      super plant_index, link: link
+    end
+  end
+
+  class Pressed < Plant # FIXME: This needs to descend from Plant and Creature
     def self.pressed_category ; organic_category :Pressed end
     def self.pressed_types ; organic_types[pressed_category] end
     def self.pressed_material_infos ; pressed_types.map {|(c,i)| material_info c, i } end
@@ -815,15 +954,32 @@ module DFStock
   # TODO: Find item raws for these
   class Furniture < Thing
     def self.index_translation ; (0 ... DFHack::FurnitureType::ENUM.length) end
-    def self.find_furniture id ; DFHack::FurnitureType::ENUM[id] end
+    def self.furniture id ; DFHack::FurnitureType::ENUM end
 
-    def furniture ; self.class.find_furniture furniture_index end
+    def furniture ; self.class.furniture[furniture_index] end
     def token ; furniture end
-    def to_s ; "#{super} furniture_index=#{furniture_index}" end
+    def to_s ; super + " furniture_index=#{furniture_index}" end
 
     attr_reader :furniture_index
     def initialize index, link: nil
       @furniture_index = index
+      super index, link: link
+    end
+  end
+
+  # FinishedGoods [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88]
+  class FinishedGood < Thing
+    def self.finishedgood_indexes ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end # FIXME: Calculate this
+    def self.index_translation ; finishedgood_indexes end
+    def self.finishedgoods ; finishedgood_indexes.map {|i| DFHack::ItemsOtherId::ENUM[i] } end
+
+    def finishedgood ; self.class.finishedgoods[finishedgood_index] end
+    def token ; finishedgood end
+    def to_s ; super + " finishedgood_index=#{finishedgood_index}" end
+
+    attr_reader :finishedgood_index
+    def initialize index, link: nil
+      @finishedgood_index = index
       super index, link: link
     end
   end
@@ -845,25 +1001,6 @@ module DFStock
     end
   end
 
-#
-#     def produces_honey?   ; cache(:honey  ) { creature.material.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-#     def color ; material.color end
-#
-#   class Fish < Thing
-#     def self.find_fish id ; find_organic id, :Fish end
-#
-#     def token ; @fish end
-#     def to_s ; "#{super} @fish_id=#{id}" end
-#
-#     attr_reader :fish
-#     def initialize id, link: nil
-#       super
-#       @fish = self.class.find_fish id
-#       raise RuntimeError, "Unknown fish id: #{id}" unless fish
-#     end
-#   end
-#
-#
 end
 
 module DFStock
@@ -902,11 +1039,9 @@ module DFStock
     extend Scaffold
     add_array(Furniture, :type)
     add_array(Metal, :metals, :mats)
-    # add_array(OtherFurnitureMaterial, :other_materials, :other_mats)
+    # add_array(FurnitureOtherMaterial, :other_materials, :other_mats)
     add_array(Quality, :quality_core)
     add_array(Quality, :quality_total)
-    # FurnClass has .sand_bag method but it does not appear to function, and is not mapped to type[-1]
-    #           does not have a .stone method
   end
 
   module StoneMod
@@ -919,17 +1054,16 @@ module DFStock
 
   module AmmoMod
     extend Scaffold
-    # add_array(Sheet, :type)
+    # add_array(Ammo, :type)
     add_array(Metal, :metals, :mats)
-    # add_array(OtherAmmoMaterial, :other_materials, :other_mats)
+    # add_array(AmmoOtherMaterial, :other_materials, :other_mats)
     add_array(Quality, :quality_core)
     add_array(Quality, :quality_total)
   end
 
   module CoinMod
     extend Scaffold
-    # FIXME Not metals - many more materials
-    # add_array(Metal, :metals, :mats)
+    # add_array(Metal, :metals, :mats) # NOTE: Seems bugged, should just be metals, right...?
   end
 
   module BarsBlocksMod
@@ -940,10 +1074,11 @@ module DFStock
 
   module GemsMod
     extend Scaffold
-    # add_array(RoughGems, :rough_gems, :rough_mats)
-    # add_array(CutGems, :cut_gems, :cut_mats)
-    # add_array(RoughOtherGems, :rough_other_gems, :rough_other_mats)
-    # add_array(CutOtherGems, :cut_other_gems, :cut_other_mats)
+    add_array(Gem,      :rough_gems,  :rough_mats)
+    add_array(Gem,      :cut_gems,      :cut_mats)
+    add_array(CutStone, :cut_stone,     :cut_mats)
+    add_array(Glass,    :rough_glass, :rough_other_mats)
+    add_array(Glass,    :cut_glass,     :cut_other_mats)
   end
 
   module FinishedGoodsMod
@@ -958,7 +1093,7 @@ module DFStock
 
   module LeatherMod
     extend Scaffold
-    # add_array(Leather, :leather, :mats)
+    add_array(Leather, :leather, :mats)
   end
 
   module ClothMod
@@ -1010,15 +1145,15 @@ module DFStock
 
   module SheetMod
     extend Scaffold
-    # add_array(Paper, :paper)
-    # add_array(Parchment, :parchment)
+    add_array(Paper, :paper)
+    add_array(Parchment, :parchment)
   end
 
 end
 
 if self.class.const_defined? :DFHack
   class DFHack::StockpileSettings_TAnimals       ; include DFStock::AnimalMod end
-  class DFHack::StockpileSettings_TFood          ; include DFStock::FoodMod end
+  class DFHack::StockpileSettings_TFood          ; include DFStock::FoodMod end # TODO: .cookable.each {|x| ... }
   class DFHack::StockpileSettings_TFurniture     ; include DFStock::FurnitureMod end
   # Corpses
   # Refuse
@@ -1064,44 +1199,3 @@ if self.class.const_defined? :DFHack
     def inspect ; "#<#{to_s}>" end
   end
 end
-
-
-
-#   # All lists and flags together, in one list of [cat:subcat:name,v] pairs. Or, just a list of 'c:s:n', and you query for the values? Is it only the true values?
-# # require 'protocol_buffers'
-# #   # The goal is to toggle stock by specific item, by material, or by regex, and globally or in a category
-# #   # Also, to toggle the flags (category X, allow plant, etc) and set the numeric options (wheelbarrows, etc)
-# #   #
-# #   # Also desired is a way to split a stockpile, to ensure that every item in the one is represented in two or more
-# #   # piles that are intended to take from the first, cleanly separating goods.
-# #   #
-# #   # ex:
-# #   # pile = Stockpile.new
-# #   # pile.accept(/hammer/)
-# #   # pile.accept(:weapons, type: [:wood!]) # not wood weapons...?
-# #   # pile.forbid(/sword/, :food) # forbids swordferns from food, ignores :weapons category.
-# #   #
-# #   # modifiers - material, quality, ...?
-# #   # The theoretical concept of a stockpile, not the physical implementation
-# #     # Read material data by introspection of the running instance of DF
-# #     # Things like - is_food, is_millable, etc.
-# #     def self.read_dwarf_data
-# #     # Categories can be enabled without any items selected - eg. a food stockpile that accepts nothing but still prevents spoilage
-# #     # FIXME implement enable/disable - @set_fields?
-# #     def  enable_category cats ; categories.each {|cat|  enable cat } end
-# #     def disable_category cats ; categories.each {|cat| disable cat } end
-# #     # By path, eg: 'food,plants,wheat'
-# #     # set('food,prepared_meals', true)
-# #     #    add('food,meat,POND_GRABBER_SPLEEN')
-# #     # remove('food,meat,POND_GRABBER_SPLEEN')
-# #   # bars/iron
-# #   # furniture/tables/masterwork/iron
-# #   # food/prepared
-# #   # seeds/plump-helmet
-# #   # Is Stock a specific thing, or a class of things?
-# #   # Can two stock-types be combined? table/iron AND table/rock?
-# #   # Can types be subtracted? table/rock - table/obsidian - table/masterwork
-# #   # Are modifiers a thing which can be added removed?
-# #   # table + masterwork
-# #   # Are All and None special?
-# #   # All - table/iron/masterwork
