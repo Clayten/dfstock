@@ -191,7 +191,7 @@ module DFStock
     def is_economic_stone?
       !is_ore? &&
       !is_metal? &&
-      !soil? &&
+      !is_soil? &&
       !raw.economic_uses.empty?
     end
 
@@ -953,10 +953,12 @@ module DFStock
 
   # TODO: Find item raws for these
   class Furniture < Thing
-    def self.index_translation ; (0 ... DFHack::FurnitureType::ENUM.length) end
-    def self.furniture id ; DFHack::FurnitureType::ENUM end
+    def self.furniture_types ; DFHack::FurnitureType::NUME.keys end
+    def self.furniture_indexes ; (0 ... furniture_types.length).to_a end
+    def self.furnitures ; furniture_indexes.map {|i| Furniture.new i } end
+    def self.index_translation ; furniture_indexes end
 
-    def furniture ; self.class.furniture[furniture_index] end
+    def furniture ; self.class.furniture_types[furniture_index] end
     def token ; furniture end
     def to_s ; super + " furniture_index=#{furniture_index}" end
 
@@ -1112,7 +1114,7 @@ module DFStock
     attr_reader :armorbody_index
     def initialize index, link: nil
       @armorbody_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
@@ -1129,7 +1131,7 @@ module DFStock
     attr_reader :armorhead_index
     def initialize index, link: nil
       @armorhead_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
@@ -1146,7 +1148,7 @@ module DFStock
     attr_reader :armorfeet_index
     def initialize index, link: nil
       @armorfeet_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
@@ -1163,7 +1165,7 @@ module DFStock
     attr_reader :armorhand_index
     def initialize index, link: nil
       @armorhand_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
@@ -1180,7 +1182,7 @@ module DFStock
     attr_reader :armorleg_index
     def initialize index, link: nil
       @armorleg_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
@@ -1197,7 +1199,7 @@ module DFStock
     attr_reader :armorshield_index
     def initialize index, link: nil
       @armorshield_index = index
-      super item_index, link: link
+      super index, link: link
     end
   end
 
