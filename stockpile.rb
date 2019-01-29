@@ -967,20 +967,237 @@ module DFStock
     end
   end
 
-  # FinishedGoods [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88]
-  class FinishedGood < Thing
-    def self.finishedgood_indexes ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end # FIXME: Calculate this
-    def self.index_translation ; finishedgood_indexes end
-    def self.finishedgoods ; finishedgood_indexes.map {|i| DFHack::ItemsOtherId::ENUM[i] } end
+  class MiscLiquid < Thing
+    def self.miscliquid_items ; [Builtin.new(11).material, Inorganic.new(33).material] end
+    def self.miscliquid_indexes ; (0 ... self.miscliquid_items.length).to_a end
+    def self.miscliquids ; miscliquid_indexes.map {|i| MiscLiquid.new i } end
+    def self.index_translation ; miscliquid_indexes end
 
-    def finishedgood ; self.class.finishedgoods[finishedgood_index] end
-    def token ; finishedgood end
+    def material ; self.class.miscliquid_items[miscliquid_index] end
+    def natural_state ; {0 => :Liquid, 1 => :Solid}[miscliquid_index] end
+    def token ; material.state_name[natural_state] end
+    def to_s ; super + " miscliquid_index=#{miscliquid_index}" end
+
+    attr_reader :miscliquid_index
+    def initialize index, link: nil
+      @miscliquid_index = index
+      super
+    end
+  end
+
+  class Ammo < Thing
+    def self.ammo_items ; ['Bolts', 'Arrows', 'Blowdarts', 'Long Bolts', 'Short Bolts', 'Wide-headed Arrows'] end
+    def self.ammo_indexes ; (0 ... self.ammo_items.length).to_a end
+    def self.ammos ; ammo_indexes.map {|i| Ammo.new i } end
+    def self.index_translation ; ammo_indexes end
+
+    def natural_state ; {0 => :Liquid, 1 => :Solid}[ammo_index] end
+    def token ; self.class.ammo_items[ammo_index] end
+    def to_s ; super + " ammo_index=#{ammo_index}" end
+
+    attr_reader :ammo_index
+    def initialize index, link: nil
+      @ammo_index = index
+      super
+    end
+  end
+
+  class OtherMaterials < Thing
+    def self.othermaterial_items ; ['Wood', 'Plant Cloth', 'Bone', 'Tooth', 'Horn', 'Pearl', 'Shell', 'Leather', 'Silk',
+                                    'Amber', 'Coral', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn', 'Wax'] end
+    def self.othermaterial_indexes ; (0 ... othermaterial_items.length).to_a end
+    def self.othermaterials ; othermaterial_indexes.map {|i| OtherMaterials.new i } end
+    def self.index_translation ; othermaterial_indexes end
+
+    def token ; self.class.othermaterial_items[othermaterial_index] end
+    def to_s ; super + " othermaterial_index=#{othermaterial_index}" end
+
+    attr_reader :othermaterial_index
+    def initialize index, link: nil
+      @othermaterial_index = index
+      super index, link: link
+    end
+  end
+
+  class FinishedGood < Thing
+    def self.finishedgood_items ; ['chains', 'flasks', 'goblets', 'musical instruments', 'toys', 'armor', 'footwear', 'headwear',
+                                   'handwear', 'figurines', 'amulets', 'scepters', 'crowns', 'rings', 'earrings', 'bracelets',
+                                   'large gems', 'totems', 'legwear', 'backpacks', 'quivers', 'splints', 'crutches', 'tools', 'codices'] end
+    def self.finishedgood_indexes ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end
+    # def self.finishedgood_indexes ; (0 ... finishedgood_items.length).to_a end
+    def self.finishedgoods ; finishedgood_indexes.map {|i| FinishedGood.new i } end
+    def self.index_translation ; finishedgood_indexes end
+
+    def token ; self.class.finishedgood_items[finishedgood_index] end
     def to_s ; super + " finishedgood_index=#{finishedgood_index}" end
 
     attr_reader :finishedgood_index
     def initialize index, link: nil
       @finishedgood_index = index
       super index, link: link
+    end
+  end
+
+  class Item < Thing
+    def self.item_raws ; df.world.raws.itemdefs.all end
+    def self.item_indexes ; (0 ... item_raws.length).to_a end
+    def self.items ; item_indexes.map {|i| Item.new i } end
+    def self.index_translation ; item_indexes end
+
+    def raw ; self.class.item_raws[item_index] end
+
+    def adjective ; raw.adjective if raw.respond_to?(:adjective) && !raw.adjective.empty? end
+    def name ; raw.name end
+    def name_plural ; raw.name_plural end
+    def flags       ; raw.respond_to?(:flags)       ? raw.flags.a       : [] end
+    def base_flags  ; raw.respond_to?(:base_flags)  ? raw.base_flags.a  : [] end
+    def props_flags ; raw.respond_to?(:props)       ? raw.props.flags.a : [] end
+    def raw_strings ; raw.respond_to?(:raw_strings) ? raw.raw_strings   : [] end
+
+    def to_s ; super + " item_index=#{item_index}" end
+    def token ; "#{"#{adjective} " if adjective}#{name_plural}" end
+
+    attr_reader :item_index
+    def initialize index, link: nil
+      @item_index = index
+      super
+    end
+  end
+
+  # Bool array is large enough for weapons, not all items.
+  class Weapon < Item
+    def self.weapon_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefWeaponst }.map {|x,i| i } end
+    def self.weapons ; weapon_indexes.each_index.map {|i| Weapon.new i } end
+    def self.index_translation ; weapon_indexes end
+
+    def item_index ; self.class.weapon_indexes[weapon_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " weapon_index=#{weapon_index}" end
+
+    attr_reader :weapon_index
+    def initialize index, link: nil
+      @weapon_index = index
+      super index, link: link
+    end
+  end
+
+  class TrapWeapon < Item
+    def self.trapweapon_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefTrapcompst }.map {|x,i| i } end
+    def self.trapweapons ; trapweapon_indexes.each_index.map {|i| TrapWeapon.new i } end
+    def self.index_translation ; trapweapon_indexes end
+
+    def item_index ; self.class.trapweapon_indexes[trapweapon_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " trapweapon_index=#{trapweapon_index}" end
+
+    attr_reader :trapweapon_index
+    def initialize index, link: nil
+      @trapweapon_index = index
+      super index, link: link
+    end
+  end
+
+  class ArmorBody < Item
+    def self.armorbody_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefArmorst }.map {|x,i| i } end
+    def self.armorbodys ; armorbody_indexes.each_index.map {|i| ArmorBody.new i } end
+    def self.index_translation ; armorbody_indexes end
+
+    def item_index ; self.class.armorbody_indexes[armorbody_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorbody_index=#{armorbody_index}" end
+
+    attr_reader :armorbody_index
+    def initialize index, link: nil
+      @armorbody_index = index
+      super item_index, link: link
+    end
+  end
+
+  class ArmorHead < Item
+    def self.armorhead_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefHelmst }.map {|x,i| i } end
+    def self.armorheads ; armorhead_indexes.each_index.map {|i| ArmorHead.new i } end
+    def self.index_translation ; armorhead_indexes end
+
+    def item_index ; self.class.armorhead_indexes[armorhead_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorhead_index=#{armorhead_index}" end
+
+    attr_reader :armorhead_index
+    def initialize index, link: nil
+      @armorhead_index = index
+      super item_index, link: link
+    end
+  end
+
+  class ArmorFeet < Item
+    def self.armorfeet_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefShoesst }.map {|x,i| i } end
+    def self.armorfeets ; armorfeet_indexes.each_index.map {|i| ArmorFeet.new i } end
+    def self.index_translation ; armorfeet_indexes end
+
+    def item_index ; self.class.armorfeet_indexes[armorfeet_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorfeet_index=#{armorfeet_index}" end
+
+    attr_reader :armorfeet_index
+    def initialize index, link: nil
+      @armorfeet_index = index
+      super item_index, link: link
+    end
+  end
+
+  class ArmorHand < Item
+    def self.armorhand_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefGlovesst }.map {|x,i| i } end
+    def self.armorhands ; armorhand_indexes.each_index.map {|i| ArmorHand.new i } end
+    def self.index_translation ; armorhand_indexes end
+
+    def item_index ; self.class.armorhand_indexes[armorhand_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorhand_index=#{armorhand_index}" end
+
+    attr_reader :armorhand_index
+    def initialize index, link: nil
+      @armorhand_index = index
+      super item_index, link: link
+    end
+  end
+
+  class ArmorLeg < Item
+    def self.armorleg_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefPantsst }.map {|x,i| i } end
+    def self.armorlegs ; armorleg_indexes.each_index.map {|i| ArmorLeg.new i } end
+    def self.index_translation ; armorleg_indexes end
+
+    def item_index ; self.class.armorleg_indexes[armorleg_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorleg_index=#{armorleg_index}" end
+
+    attr_reader :armorleg_index
+    def initialize index, link: nil
+      @armorleg_index = index
+      super item_index, link: link
+    end
+  end
+
+  class ArmorShield < Item
+    def self.armorshield_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefShieldst }.map {|x,i| i } end
+    def self.armorshields ; armorshield_indexes.each_index.map {|i| ArmorShield.new i } end
+    def self.index_translation ; armorshield_indexes end
+
+    def item_index ; self.class.armorshield_indexes[armorshield_index] end
+    def raw ; self.class.item_raws[item_index] end
+
+    def to_s ; super + " armorshield_index=#{armorshield_index}" end
+
+    attr_reader :armorshield_index
+    def initialize index, link: nil
+      @armorshield_index = index
+      super item_index, link: link
     end
   end
 
@@ -1032,7 +1249,7 @@ module DFStock
     add_array(Pressed,          :pressed,         :glob_pressed)
     add_array(PlantExtract,     :plant_extract,   :liquid_plant)
     add_array(CreatureExtract,  :animal_extract,  :liquid_animal)
-  # add_array(MiscLiquid,       :misc_liquid,     :liquid_misc)
+    add_array(MiscLiquid,       :misc_liquid,     :liquid_misc)
   end
 
   module FurnitureMod
@@ -1054,7 +1271,7 @@ module DFStock
 
   module AmmoMod
     extend Scaffold
-    # add_array(Ammo, :type)
+    add_array(Ammo, :type)
     add_array(Metal, :metals, :mats)
     # add_array(AmmoOtherMaterial, :other_materials, :other_mats)
     add_array(Quality, :quality_core)
@@ -1083,10 +1300,11 @@ module DFStock
 
   module FinishedGoodsMod
     extend Scaffold
-    # mats # stone/clay, metal, gem
-    # other_mats
-    # type
+    add_array(FinishedGood, :type)
+    add_array(CutStone, :stones, :mats)
+    add_array(Gem, :gems, :mats)
     add_array(Metal, :metals, :mats)
+    add_array(OtherMaterials, :other_mats)
     add_array(Quality, :quality_core)
     add_array(Quality, :quality_total)
   end
@@ -1117,11 +1335,11 @@ module DFStock
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    # trapcomp_type
-    # weapon_type
-    # mats # stone + metal
+    add_array(Weapon,     :weapons, :weapon_type)
+    add_array(TrapWeapon, :traps,   :trapcomp_type)
+    add_array(Metal,    :metals, :mats)
+    add_array(CutStone, :stones, :mats)
     # other_mats
-    add_array(Metal, :metals, :mats)
     add_array(Quality, :quality_core)
     add_array(Quality, :quality_total)
   end
@@ -1130,15 +1348,14 @@ module DFStock
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    # body
-    # feet
-    # hands
-    # head
-    # legs
-    # shield
-    # mats
-    # other_mats
+    add_array(ArmorBody, :body)
+    add_array(ArmorHead, :head)
+    add_array(ArmorHand, :hands)
+    add_array(ArmorFeet, :feet)
+    add_array(ArmorLeg,  :legs)
+    add_array(ArmorShield,  :shield)
     add_array(Metal, :metals, :mats)
+    # other_mats
     add_array(Quality, :quality_core)
     add_array(Quality, :quality_total)
   end
