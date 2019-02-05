@@ -131,8 +131,9 @@ module DFStock
       raise "Linked array is empty - did you enable the category?" if link.empty?
       raise "Index #{index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === index
     end
-    def set   x   ; check_index ; link[index] = !!x end
-    def  enabled? ; check_index ; link[index] end
+    def set x ; check_index ; link[index] = !!x end
+    def get   ; check_index ; link[index] end
+    def  enabled? ; !!get end
     def  enable   ; set true end
     def disable   ; set false end
     def  toggle   ; set !enabled? end
@@ -208,6 +209,7 @@ module DFStock
     end
   end
 
+  # raw -> material
   class Inorganic < Thing
     def self.inorganic_raws ; df.world.raws.inorganics end
     def self.inorganic_indexes ; (0 ... inorganic_raws.length).to_a end
@@ -267,7 +269,7 @@ module DFStock
     end
   end
 
-  class Gem < Inorganic
+  class Gem < Inorganic # Fixme - Why stone_index not inorganic_index?
     def self.gem_indexes ; cache(:gems) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_gem? ; a } } end
     def self.gems ; gem_indexes.each_index.map {|i| Gem.new i } end
     def self.index_translation ; gem_indexes end
@@ -283,6 +285,7 @@ module DFStock
   end
 
   class CutStone < Inorganic # NOTE: A Different definition of stone than the stone stockpile
+    # FIXME - Should be inorganic_index, not stone_index
     def self.cutstone_indexes ; cache(:cutstones) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_stone? ; a } } end
     def self.cutstones ; cutstone_indexes.each_index.map {|i| CutStone.new i } end
     def self.index_translation ; cutstone_indexes end
@@ -308,6 +311,7 @@ module DFStock
     def self.clay_indexes     ; cache(:clays)     { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
 
     def inorganic_index ; self.class.stone_indexes[stone_index] end
+    def to_s ; super + " stone_index=#{stone_index}" end
 
     attr_reader :stone_index
     def initialize index, link: nil
@@ -316,55 +320,59 @@ module DFStock
     end
   end
 
-  class Ore < Stone
+  class Ore < Stone # FIXME: Make dependant on Stone indexes, not directly on Inorganic
     def self.ores ; ore_indexes.each_index.map {|i| Ore.new i } end
     def self.index_translation ; ore_indexes end
-    def inorganic_index ; self.class.ore_indexes[ore_index] end
+
+    def stone_index ; self.class.stone_indexes.index self.class.ore_indexes[ore_index] end
     def to_s ; super + " ore_index=#{ore_index}" end
 
     attr_reader :ore_index
     def initialize index, link: nil
       @ore_index = index
-      super inorganic_index, link: link
+      super stone_index, link: link
     end
   end
 
   class EconomicStone < Stone
     def self.economic_stones ; economic_indexes.each_index.map {|i| Ore.new i } end
     def self.index_translation ; economic_indexes end
-    def inorganic_index ; self.class.economic_indexes[economic_index] end
+
+    def stone_index ; self.class.stone_indexes.index self.class.economic_indexes[economic_index] end
     def to_s ; super + " economic_index=#{economic_index}" end
 
     attr_reader :economic_index
     def initialize index, link: nil
       @economic_index = index
-      super inorganic_index, link: link
+      super stone_index, link: link
     end
   end
 
   class OtherStone < Stone
     def self.other_stones ; other_indexes.each_index.map {|i| OtherStone.new i } end
     def self.index_translation ; other_indexes end
-    def inorganic_index ; self.class.other_indexes[other_index] end
+
+    def stone_index ; self.class.stone_indexes.index self.class.other_indexes[other_index] end
     def to_s ; super + " other_index=#{other_index}" end
 
     attr_reader :other_index
     def initialize index, link: nil
       @other_index = index
-      super inorganic_index, link: link
+      super stone_index, link: link
     end
   end
 
   class Clay < Stone
     def self.clays ; clay_indexes.each_index.map {|i| Clay.new i } end
     def self.index_translation ; clay_indexes end
-    def inorganic_index ; self.class.clay_indexes[clay_index] end
+
+    def stone_index ; self.class.stone_indexes.index self.class.clay_indexes[clay_index] end
     def to_s ; super + " clay_index=#{clay_index}" end
 
     attr_reader :clay_index
     def initialize index, link: nil
       @clay_index = index
-      super inorganic_index, link: link
+      super stone_index, link: link
     end
   end
 
@@ -1253,15 +1261,14 @@ module DFStock
   end
 
   class Refuse < Thing # FIXME: Manual list
-    # indexes: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77, 78, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89]
     # 81 items, plus two flags which sit at [1] and [2] in the list.
-    def self.refuse_items ; [] end
-    def self.refuse_indexes ; (0 ... finishedgoodsothermaterial_items.length).to_a end
-    def self.refuses ; finishedgoodsothermaterial_indexes.map {|i| Refuse.new i } end
+    def self.refuse_items ; ["Thing  0", "Thing  1", "Thing  2", "Thing  3", "Thing  4", "Thing  5", "Thing  6", "Thing  7", "Thing  8", "Thing  9", "Thing 10", "Thing 11", "Thing 12", "Thing 13", "Thing 14", "Thing 15", "Thing 16", "Thing 17", "Thing 18", "Thing 19", "Thing 20", "Thing 21", "Thing 22", "Thing 23", "Thing 24", "Thing 25", "Thing 26", "Thing 27", "Thing 28", "Thing 29", "Thing 30", "Thing 31", "Thing 32", "Thing 33", "Thing 34", "Thing 35", "Thing 36", "Thing 37", "Thing 38", "Thing 39", "Thing 40", "Thing 41", "Thing 42", "Thing 43", "Thing 44", "Thing 45", "Thing 46", "Thing 47", "Thing 48", "Thing 49", "Thing 50", "Thing 51", "Thing 52", "Thing 53", "Thing 54", "Thing 55", "Thing 56", "Thing 57", "Thing 58", "Thing 59", "Thing 60", "Thing 61", "Thing 62", "Thing 63", "Thing 64", "Thing 65", "Thing 66", "Thing 67", "Thing 68", "Thing 69", "Thing 70", "Thing 71", "Thing 72", "Thing 73", "Thing 74", "Thing 75", "Thing 76", "Thing 77", "Thing 78", "Thing 79", "Thing 80"] end
+    def self.refuse_indexes ; [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77, 78, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89] end
+    def self.refuses ; refuse_indexes.map {|i| Refuse.new i } end
     def self.index_translation           ; refuse_indexes end
 
-    def token ; self.class.refuse_items[finishedgoodsothermaterial_index] end
-    def to_s ; super + " refuse_index=#{finishedgoodsothermaterial_index}" end
+    def token ; self.class.refuse_items[refuse_index] end
+    def to_s ; super + " refuse_index=#{refuse_index}" end
 
     attr_reader :refuse_index
     def initialize index, link: nil
@@ -1638,18 +1645,24 @@ module DFStock
     add_array(Parchment, :parchment)
   end
 
+  # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the whole category
   module StockFinder
-    # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the whole category
+
+    # From the current classname, what's the method name the parent object uses to refer to you
     def stock_category
       name = self.class.to_s.split(/_T/).last.to_sym
       {Animals: 'animals', Food: 'food', Furniture: 'furniture', Refuse: 'refuse', Stone: 'stone', Ammo: 'ammo', Coins: 'coins', BarsBlocks: 'bars_blocks',
        Gems: 'gems', FinishedGoods: 'finished_goods', Leather: 'leather', Cloth: 'cloth', Wood: 'wood', Weapons: 'weapons', Armor: 'armor', Sheet: 'sheet'}[name]
     end
+
+    # Look at all possible parents to find the one pointing to the same memory as your sub-object
     def parent_stockpile ; ObjectSpace.each_object(DFHack::BuildingStockpilest).find {|sp| sp.z rescue next ; sp.send(stock_category)._memaddr == _memaddr } end
+
     def     set x ; parent_stockpile.stock_flags.send "#{stock_category}=", x ; x end
-    def enabled?  ; parent_stockpile.stock_flags.send "#{stock_category}" end
+    def     get   ; parent_stockpile.stock_flags.send "#{stock_category}" end
     def  enable   ; set true  end
     def disable   ; set false end
+    def enabled?  ; !!get end
   end
 
 end
