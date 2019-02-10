@@ -1645,7 +1645,7 @@ module DFStock
     add_array(Parchment, :parchment)
   end
 
-  # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the whole category
+  # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category
   module StockFinder
 
     # From the current classname, what's the method name the parent object uses to refer to you
@@ -1670,7 +1670,7 @@ end
 if self.class.const_defined? :DFHack
   class DFHack::StockpileSettings_TAnimals       ; include DFStock::StockFinder, DFStock::AnimalMod end
   class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod
-    def cookable ; raise ; end
+    def cookable ; raise ; end # just the items, across sub-categories, that need a kitchen to become food
   end
   class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod end
   # Corpses
@@ -1710,6 +1710,8 @@ if self.class.const_defined? :DFHack
     def armor              ; settings.armor end
     def sheet              ; settings.sheet end
     def categories ; [animals, food, furniture, refuse, stone, ammo, coins, bars_blocks, gems, finished_goods, leather, cloth, wood, weapons, armor, sheet] end
+    def set str ; puts "Setting stockpile acceptance to '#{str}'" end
+    def to_s ; 'not implemented yet' end # the inverse of set
   end
 
   class DFHack::StockpileSettings
