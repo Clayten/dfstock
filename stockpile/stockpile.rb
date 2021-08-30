@@ -1,16 +1,28 @@
 module DFStock
+
+  # Code-generation to simplify describing the actual stockpile representing classes.
+  # So many arrays of these things, so many flags, etc.
+  #
+  # Runs at the start of inclusion and sets up some stuff. Then the pile is defined, and finally the definitions
+  # are turning into 
   module Scaffold
+    # 
+    # When a module is included it's .extended() method is called with class/module it's being included into
+    # then 
+    #
+
     # This runs at inclusion into the X_Mod classes
     def self.extended klass
-      # p [:ext, klass]
+      p [:ext, self, :into, klass]
       klass.instance_variable_set(:@features, []) # Initialize the array, eliminate old definitions from previous loads
     end
+
 
     # These run during class-definition at load-time
     def add_array stockklass, desired_name, actual_name = desired_name
       desired_name, actual_name = desired_name.to_sym, actual_name
       array = [:array, desired_name, actual_name, stockklass]
-      # p [:add_array, array]
+      p [:add_array, self, :array, array]
       @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an && stockklass = sk }
       @features.push(array)
       desired_name
@@ -25,7 +37,7 @@ module DFStock
 
     # This runs slightly later, at inclusion
     def included klass
-      p [:included, self, klass, :features, @features.length]
+      p [:included, self, :class, klass, :features, @features.length]
 
       # FIXME Change add method to take class as an argument, not hidden in a block
       # then query the class's index_translation table for size, rather than the
@@ -1460,6 +1472,7 @@ module DFStock
 
     attr_reader :quality_index
     def initialize index, link: nil
+      # raise "#{self.class} number #{index} doesn't exist." unless index > 0 and index <= quality_indexes.length
       @quality_index = index
       super
     end
