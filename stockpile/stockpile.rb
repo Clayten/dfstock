@@ -1,4 +1,16 @@
+# Force the loading of 'thing.rb' before this file.
+DwarfFortressUtils.loadlib(File.join(File.dirname(__FILE__), 'thing.rb'))
+
 module DFStock
+
+  ###
+  #
+  # These are the definitions of the stockpile-settings accessors we will create.
+  #
+  # These use the Scaffold plugin to link Thing classes to menu option.
+  #
+  ###
+
   module AnimalMod
     extend Scaffold
     add_flag(:empty_traps)
