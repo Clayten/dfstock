@@ -1,19 +1,4 @@
 module DFStock
-
-  module Raw
-    def materials ; raw.material end # NOTE: Redefine as appropriate in the base-class when redefining material.
-    def material  ; materials.first end
-  end
-
-  module Material
-    def material_ids ; materials.map &:id end
-    def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-    def material_flags ms = materials ; ms = [*ms] ; cache(:material_flags, *ms.map(&:id)) { active_flags [*ms].map(&:flags) } end
-  end
-
-end
-
-module DFStock
   module AnimalMod
     extend Scaffold
     add_flag(:empty_traps)
