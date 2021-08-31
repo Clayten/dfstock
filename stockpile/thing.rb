@@ -1,5 +1,10 @@
 module DFStock
 
+  # A Stock 'Thing' is a bit conceptual, as I'm modelling quality levels that way as well as items
+  # mostly though, things are a plant, or are made of a plant material, for example. One is a plant raw, the other a plant material.
+  # A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
+  # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
+
   class Thing
     include Raw
     include Material
@@ -69,6 +74,19 @@ module DFStock
       @link  = link
     end
   end
+
+  # # Template
+  # class X < Thing
+  #   def self.X_indexes ; (0 ... ??.length).to_a end
+  #   def self.index_translation ; X_indexes end
+  #   def Y_index ; self.class.X_indexes[X_index] end
+  #   def to_s ; super + " X_index=#{X_index}" end
+  #   attr_reader :X_index
+  #   def initialize index, link: nil
+  #     @X_index = index
+  #     super Y_index, link: link
+  #   end
+  # end
 
   class Builtin < Thing
     def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a end

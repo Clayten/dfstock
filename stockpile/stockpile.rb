@@ -1,7 +1,3 @@
-# A Stock 'Thing' is a bit conceptual, as I'm modelling quality levels that way as well as items
-# mostly though, things are a plant, or are made of a plant material, for example. One is a plant raw, the other a plant material.
-# A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
-# As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 module DFStock
 
   def self.testable_classes
@@ -35,19 +31,6 @@ module DFStock
     def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
     def material_flags ms = materials ; ms = [*ms] ; cache(:material_flags, *ms.map(&:id)) { active_flags [*ms].map(&:flags) } end
   end
-
-  # # Template
-  # class X < Y
-  #   def self.X_indexes ; (0 ... ??.length).to_a end
-  #   def self.index_translation ; X_indexes end
-  #   def Y_index ; self.class.X_indexes[X_index] end
-  #   def to_s ; super + " X_index=#{X_index}" end
-  #   attr_reader :X_index
-  #   def initialize index, link: nil
-  #     @X_index = index
-  #     super Y_index, link: link
-  #   end
-  # end
 
 end
 
