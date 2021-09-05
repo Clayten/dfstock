@@ -11,7 +11,7 @@ module DFStock
     # where it build and binds the accessor code created previously.
     #
     #
-    # 
+    #
     # When you call 'extend X', X.extended(klassname) is called. The same with include/included().
     #
     # To use, create a DFStock::TypeMod module, where Type is the stockpile type. Stone, Food, etc.
@@ -19,13 +19,13 @@ module DFStock
     #
     #
     #
-    # When a module is included it's .extended() method is called with class/module it's being included into
-    # then 
+    # When a module is included it's .extended() method is called with class/module it's being included into.
+    #
     #
 
     # This runs when Scaffold is *extended* into a DFStock:: *module* - it sets up the later parts
     def self.extended klass
-      p [:ext, self, :into, klass]
+      # p [:ext, self, :into, klass]
       klass.instance_variable_set(:@features, []) # Initialize the array, eliminate old definitions from previous loads
     end
 
@@ -33,7 +33,7 @@ module DFStock
     def add_array stockklass, desired_name, actual_name = desired_name
       desired_name, actual_name = desired_name.to_sym, actual_name
       array = [:array, desired_name, actual_name, stockklass]
-      p [:add_array, self, :array, array]
+      # p [:add_array, self, :array, array]
       @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an && stockklass = sk }
       @features.push(array)
       desired_name
@@ -42,6 +42,7 @@ module DFStock
     # This is called during class-definition at load-time
     def add_flag desired_name, actual_name = desired_name
       flag = [:flag, desired_name, actual_name]
+      # p [:add_flag, self, :flag, flag]
       @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an }
       @features.push(flag)
       desired_name
@@ -49,7 +50,7 @@ module DFStock
 
     # This runs when the DFStock *module* is *included* into a DFHack::StockpileSettings *class* - it creates the accessors
     def included klass
-      p [:included, self, :class, klass, :features, @features.length]
+      # p [:included, self, :class, klass, :features, @features.length]
 
       # FIXME Change add method to take class as an argument, not hidden in a block
       # then query the class's index_translation table for size, rather than the

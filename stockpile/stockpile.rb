@@ -176,6 +176,15 @@ module DFStock
   end
 
   # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category
+  #
+  # Stockpile category items aren't directly linked to their container, to go back up the tree such
+  # as by asking a child to manipulate its parent is done via ObjectSpace lookup to find the right parent.
+  #
+  # s = stockpile_at_cursor()
+  # s.id
+  # -> 12
+  # s.food.parent_stockpile.id
+  # -> 12
   module StockFinder
 
     # From the current classname, what's the method name the parent object uses to refer to you
@@ -239,9 +248,13 @@ if self.class.const_defined? :DFHack
     def weapons            ; settings.weapons end
     def armor              ; settings.armor end
     def sheet              ; settings.sheet end
+
+    # Categories in the order they appear in the stockpile
     def categories ; [animals, food, furniture, refuse, stone, ammo, coins, bars_blocks, gems, finished_goods, leather, cloth, wood, weapons, armor, sheet] end
-    def set str ; puts "Setting stockpile acceptance to '#{str}'" end
-    def to_s ; 'not implemented yet' end # the inverse of set
+
+    # Intended to quickly configure basic piles with some simple code like geekcode
+    def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
+    def to_s    ; puts "not implemented yet" ; raise end # the inverse of set
   end
 
   class DFHack::StockpileSettings

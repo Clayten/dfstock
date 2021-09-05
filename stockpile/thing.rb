@@ -318,7 +318,7 @@ module DFStock
 
     def raw ; self.class.creature_raws[creature_index] end
     def flags ; raw.flags end
-    def token ; raw.creature_id end
+    # def token ; raw.creature_id end
 
     def caste_symbol
       {'QUEEN'   => '♀', 'FEMALE' => '♀', 'SOLDIER' => '♀', 'WORKER' => '♀',
@@ -329,7 +329,8 @@ module DFStock
     def caste_index ; @caste_index ||= 0 end
     def caste ; raw.caste[caste_index] end
 
-    def token ; "#{caste.caste_name.first}" end
+    # def token ; "#{caste.caste_name.first}" end # 'toad *woman*' leather. Which caste is the default?
+    def token ; raw.name.first end
     def to_s ; "#{super} creature_index=#{creature_index}" end
 
     def is_creature? ; cache(:creature, creature_index) { raw.respond_to?(:creature_id) && !flags[:EQUIPMENT_WAGON] } end
@@ -363,7 +364,7 @@ module DFStock
     def creature_index ; self.class.animal_indexes[animal_index] end
 
     def to_s ; super + " animal_index=#{animal_index}" end
-    def token ; n = raw.name[1] ; n =~ /^[A-Z]/ ? n : n.capitalize end
+    def token ; n = raw.name[1] ; n =~ /[A-Z]/ ? n : n.capitalize end # Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
 
     attr_reader :animal_index
     def initialize index, link: nil
@@ -456,7 +457,7 @@ module DFStock
     def materials ; raw.material.select {|m| m.id =~ /EGG/ } end
     def material ; materials.find {|m| m.id =~ /YOLK/ } end
 
-    def token ; raw.caste.first.caste_name.first end
+    def token ; (raw.caste.first.caste_name.first.split(/\s+/) + ['egg']).map(&:capitalize).join(' ') end
     def to_s ; super + " egg_index=#{egg_index}" end
 
     attr_reader :egg_index
