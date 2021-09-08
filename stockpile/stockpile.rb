@@ -252,6 +252,32 @@ if self.class.const_defined? :DFHack
     # Categories in the order they appear in the stockpile
     def categories ; [animals, food, furniture, refuse, stone, ammo, coins, bars_blocks, gems, finished_goods, leather, cloth, wood, weapons, armor, sheet] end
 
+    def status
+# "# of Incoming Stockpile Links: #{x.links.take_from_pile.length} - # of Outgoing Stockpile Links: #{x.links.give_to_pile.length}",
+# "# of Incoming Workshop Links: #{x.links.take_from_workshop.length} - # of Outgoing Workshop Links: #{x.links.give_to_workshop.length}",
+      puts "Stockpile ##{stockpile_number} - #{name.inspect}"
+      puts "# Max Barrels: #{max_barrels} - # Max Bins: #{max_bins} - # Max Wheelbarrows: #{max_wheelbarrows}"
+      bins, barrels = [:BIN, :BARREL].map {|t| container_type.select {|i| i == t }.length }
+      puts "# of Containers: #{container_type.length}, bins: #{bins}, barrels: #{barrels}"
+      puts "Allow Organics: #{allow_organic}. Allow Inorganics: #{allow_inorganic}"
+      puts "Mode: #{use_links_only == 1 ? 'Use Links Only' : 'Take From Anywhere'}"
+
+      puts "Linked Stops: #{linked_stops.length} #{linked_stops.map(&:name).join}"
+      puts "Incoming Stockpile Links: #{links.take_from_pile.length} #{
+        links.take_from_pile.map(&:name).join(', ')}"
+      puts "Outgoing Stockpile Links: #{links.give_to_pile.length} #{
+        links.give_to_pile.map(&:name).join(', ')}"
+      puts "Incoming Workshop Links: #{links.take_from_workshop.length} #{
+        links.take_from_workshop.map {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
+      puts "Outgoing Workshop Links: #{links.give_to_workshop.length} #{
+        links.give_to_workshop.map   {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
+
+      categories.each {|c|
+        k = c.class.to_s.sub(/^.+_T/,'')
+        puts "#{'%20s' % k} #{c.enabled?}"
+      }
+    end
+
     # Intended to quickly configure basic piles with some simple code like geekcode
     def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
     def to_s    ; puts "not implemented yet" ; raise end # the inverse of set
