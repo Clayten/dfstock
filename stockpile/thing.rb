@@ -73,10 +73,16 @@ module DFStock
     def self.inspect_cache ; internal_cache end
 
     def token ; 'NONE' end
-    def to_s ; "#{self.class.name} linked=#{!!link}#{" enabled=#{!!enabled?}" if link} token=#{token.inspect} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{linked?}#{" enabled=#{!!enabled?}" if linked?} token=#{token.inspect} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
-    attr_reader :index, :link
+    def link ; @link end
+    def linked? ; link && !link.empty? end
+
+    def is_magma_safe? ; material.heat.melting_point > 12000 end
+    # Seems to be wrong in some cases, coal is 60001, but seems to burn. Caveat Buildorf
+
+    attr_reader :index
     def initialize index, link: nil
       raise "You can't instantiate the base class" if self.class == Thing
       raise "No index provided - invalid #{self.class} creation" unless index
@@ -1086,12 +1092,23 @@ module DFStock
   end
 
   class BarOtherMaterial < Thing # FIXME: Manual list
-    def self.barothermaterial_items ; %w(Coal Potash Ash Pearlash Soap) end
+    # def self.barothermaterial_items ; %w(Coal Potash Ash Pearlash Soap) end
+    def self.barothermaterial_items # Note - not very consistent
+      [
+        Builtin.new(7).material,
+        Builtin.new(8).material,
+        Builtin.new(9).material,
+        Builtin.new(10).material,
+        Creature.new(0).materials[21]
+      ]
+    end
     def self.barothermaterial_indexes ; (0 ... barothermaterial_items.length).to_a end
     def self.barothermaterials ; barothermaterial_indexes.map {|i| BarOtherMaterial.new i } end
     def self.index_translation           ; barothermaterial_indexes end
 
-    def token ; self.class.barothermaterial_items[barothermaterial_index] end
+    def material ; self.class.barothermaterial_items[barothermaterial_index] end
+
+    def token ; self.class.barothermaterial_items[barothermaterial_index].id end
     def to_s ; super + " barothermaterial_index=#{barothermaterial_index}" end
 
     attr_reader :barothermaterial_index
