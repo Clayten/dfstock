@@ -6,7 +6,7 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Raw
-    def materials ; return [] unless respond_to? :raw ; raw.material end # NOTE: Redefine as appropriate in the base-class when redefining material.
+    def materials ; return [] unless respond_to? :raw ; raw.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
     def material  ; materials.first end
     def raws ; return false unless raw ; raw.raws.sort end
   end
@@ -31,6 +31,25 @@ module DFStock
       cat_num = organic_category cat_name
       raise "Unknown category '#{cat_name.inspect}'" unless cat_num
       organic_types[cat_num][index]
+    end
+
+    # For a class, list all of its instances
+    def self.instances
+      nm = self.name.split(':').last.downcase
+      [
+        nm,                   # fish    -> fish
+        (nm + 's'),           # tree    -> trees
+        (nm + 'es'),          # glass   -> glasses
+        (nm.sub(/f$/,'ves')), # leaf    -> leaves
+        (nm.sub(/y$/,'ies'))  # quality -> qualities
+      ].each {|mn|
+        return send(mn) if respond_to?(mn)
+      }
+      false
+    end
+
+    def self.subclasses
+      ObjectSpace.each_object.select {|o| o.is_a?(Class) && o < self }.sort_by(&:to_s)
     end
 
     private
@@ -283,7 +302,7 @@ module DFStock
   end
 
   class EconomicStone < Stone
-    def self.economic_stones ; economic_indexes.each_index.map {|i| Ore.new i } end
+    def self.economicstones ; economic_indexes.each_index.map {|i| new i } end
     def self.index_translation ; economic_indexes end
 
     def stone_index ; self.class.stone_indexes.index self.class.economic_indexes[economic_index] end
@@ -297,7 +316,7 @@ module DFStock
   end
 
   class OtherStone < Stone
-    def self.other_stones ; other_indexes.each_index.map {|i| OtherStone.new i } end
+    def self.otherstones ; other_indexes.each_index.map {|i| OtherStone.new i } end
     def self.index_translation ; other_indexes end
 
     def stone_index ; self.class.stone_indexes.index self.class.other_indexes[other_index] end
@@ -995,23 +1014,23 @@ module DFStock
   end
 
   class PlantExtract < Plant
-    def self.plantliquid_category ; organic_category :PlantLiquid end
-    def self.plantliquid_types ; organic_types[plantliquid_category] end
-    def self.plantliquid_material_infos ; plantliquid_types.map {|(c,i)| material_info c, i } end
-    def self.plantliquid_indexes ; (0 ... plantliquid_types.length).to_a end
-    def self.plantliquids ; plantliquid_indexes.each_index.map {|i| PlantExtract.new i } end
-    def self.index_translation ; plantliquid_indexes end
+    def self.plantextract_category ; organic_category :PlantLiquid end
+    def self.plantextract_types ; organic_types[plantextract_category] end
+    def self.plantextract_material_infos ; plantextract_types.map {|(c,i)| material_info c, i } end
+    def self.plantextract_indexes ; (0 ... plantextract_types.length).to_a end
+    def self.plantextracts ; plantextract_indexes.each_index.map {|i| PlantExtract.new i } end
+    def self.index_translation ; plantextract_indexes end
 
-    def material_info ; self.class.plantliquid_material_infos[plantliquid_index] end
+    def material_info ; self.class.plantextract_material_infos[plantextract_index] end
     def material ; material_info.material end
     def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.plant end
     def token ; "#{material.state_name[:Liquid]}" end
-    def to_s ; super + " plantliquid_index=#{plantliquid_index}" end
+    def to_s ; super + " plantextract_index=#{plantextract_index}" end
 
-    attr_reader :plantliquid_index
+    attr_reader :plantextract_index
     def initialize index, link: nil
-      @plantliquid_index = index
+      @plantextract_index = index
       super
     end
   end
@@ -1210,7 +1229,7 @@ module DFStock
                                    'large gems', 'totems', 'legwear', 'backpacks', 'quivers', 'splints', 'crutches', 'tools', 'codices'] end
     def self.finishedgood_indexes ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end
     # def self.finishedgood_indexes ; (0 ... finishedgood_items.length).to_a end
-    def self.finishedgoods ; finishedgood_indexes.map {|i| FinishedGood.new i } end
+    def self.finishedgoods ; (0 ... finishedgood_indexes.length).map {|i| FinishedGood.new i } end
     def self.index_translation ; finishedgood_indexes end
 
     def index ; self.class.finishedgood_indexes[finishedgood_index] end
@@ -1228,7 +1247,7 @@ module DFStock
     # 81 items, plus two flags which sit at [1] and [2] in the list.
     def self.refuse_items ; ["Thing  0", "Thing  1", "Thing  2", "Thing  3", "Thing  4", "Thing  5", "Thing  6", "Thing  7", "Thing  8", "Thing  9", "Thing 10", "Thing 11", "Thing 12", "Thing 13", "Thing 14", "Thing 15", "Thing 16", "Thing 17", "Thing 18", "Thing 19", "Thing 20", "Thing 21", "Thing 22", "Thing 23", "Thing 24", "Thing 25", "Thing 26", "Thing 27", "Thing 28", "Thing 29", "Thing 30", "Thing 31", "Thing 32", "Thing 33", "Thing 34", "Thing 35", "Thing 36", "Thing 37", "Thing 38", "Thing 39", "Thing 40", "Thing 41", "Thing 42", "Thing 43", "Thing 44", "Thing 45", "Thing 46", "Thing 47", "Thing 48", "Thing 49", "Thing 50", "Thing 51", "Thing 52", "Thing 53", "Thing 54", "Thing 55", "Thing 56", "Thing 57", "Thing 58", "Thing 59", "Thing 60", "Thing 61", "Thing 62", "Thing 63", "Thing 64", "Thing 65", "Thing 66", "Thing 67", "Thing 68", "Thing 69", "Thing 70", "Thing 71", "Thing 72", "Thing 73", "Thing 74", "Thing 75", "Thing 76", "Thing 77", "Thing 78", "Thing 79", "Thing 80"] end
     def self.refuse_indexes ; [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77, 78, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89] end
-    def self.refuses ; refuse_indexes.map {|i| Refuse.new i } end
+    def self.refuses ; (0 ... refuse_indexes.length).map {|i| Refuse.new i } end
     def self.index_translation           ; refuse_indexes end
 
     def token ; self.class.refuse_items[refuse_index] end
@@ -1416,7 +1435,7 @@ module DFStock
     def self.quality_names ; DFHack::ItemQuality::NUME.keys end
     def self.quality_indexes ; (0 ... quality_names.length).to_a end
     def self.index_translation ; quality_indexes end
-    def self.qualities ; index_translation.new {|i| new i } end
+    def self.qualities ; (0 ... index_translation.length).map {|i| new i } end
 
     def quality ; self.class.quality_names[quality_index] end
     def token ; quality.to_s end
