@@ -9,19 +9,6 @@ module DFStock
     #
     # This DFStock::TypeMod is then itself *included* into a DFHack::StockpileSettings_TType (eg _TArmor) *class*
     # where it build and binds the accessor code created previously.
-    #
-    #
-    #
-    # When you call 'extend X', X.extended(klassname) is called. The same with include/included().
-    #
-    # To use, create a DFStock::TypeMod module, where Type is the stockpile type. Stone, Food, etc.
-    # Extend Scaffold, and use 'add_array' and 'add_flag' to describe the DF Stockpile.
-    #
-    #
-    #
-    # When a module is included it's .extended() method is called with class/module it's being included into.
-    #
-    #
 
     # This runs when Scaffold is *extended* into a DFStock:: *module* - it sets up the later parts
     def self.extended klass
@@ -49,8 +36,11 @@ module DFStock
     end
 
     # This runs when the DFStock *module* is *included* into a DFHack::StockpileSettings *class* - it creates the accessors
+    #
+    # Note: Unlike "most" modules, the accessors aren't defined on the module, this act of inclusion
+    # triggers the manual creation of the accessors.
     def included klass
-      # p [:included, self, :class, klass, :features, @features.length]
+      # p [:included, :self, self, :into, klass, :features, @features.length, @features]
 
       # FIXME Change add method to take class as an argument, not hidden in a block
       # then query the class's index_translation table for size, rather than the
@@ -73,6 +63,7 @@ module DFStock
           end
 
           flags_array_name = original_name || actual_name
+          # p [:define_method, self, klass, desired_name]
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
             list = stockklass.index_translation # This is the reason this is a consistent class method
