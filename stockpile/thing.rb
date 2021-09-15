@@ -6,8 +6,9 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Raw
-    def materials ; raw.material end # NOTE: Redefine as appropriate in the base-class when redefining material.
+    def materials ; return [] unless respond_to? :raw ; raw.material end # NOTE: Redefine as appropriate in the base-class when redefining material.
     def material  ; materials.first end
+    def raws ; return false unless raw ; raw.raws.sort end
   end
 
   module Material
@@ -51,9 +52,12 @@ module DFStock
     def disable   ; set false end
     def  toggle   ; set !enabled? end
 
-    def basic_color ; material.basic_color end
+    def  tile_color ; material.tile_color end
     def build_color ; material.build_color end
-    def tile_color ; material.tile_color end
+    def basic_color ; material.basic_color end
+    def state_color ; material.state_color end
+    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } end
+    def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
 
     # Cache lookups - this is pretty important for performance
     # @@cache = Hash.new {|h,k| h[k] = {} } unless @@cache if class_variables.include? :@@cache
@@ -79,8 +83,20 @@ module DFStock
     def link ; @link end
     def linked? ; link && !link.empty? end
 
-    def is_magma_safe? ; material.heat.melting_point > 12000 end
-    # Seems to be wrong in some cases, coal is 60001, but seems to burn. Caveat Buildorf
+    def is_magma_safe?
+      # p [:ims?, self, :material, material]
+      magma_temp = 12000
+      mft = material.heat.mat_fixed_temp 
+      return true  if mft && mft != 60001
+
+      cdp = material.heat.colddam_point
+      return false if cdp && cdp != 60001 && cdp < magma_temp
+
+      %w(heatdam ignite melting boiling).all? {|n|
+        t = material.heat.send("#{n}_point")
+        t == 60001 || t > magma_temp
+      }
+    end
 
     attr_reader :index
     def initialize index, link: nil
@@ -1003,13 +1019,17 @@ module DFStock
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
     def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
-    def self.trees ; plants.select {|t| t.tree? } end
+    # def self.trees ; plants.select {|t| t.tree? } end
+    def self.trees ; tree_indexes.length.times.map {|i| new i } end
     def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
     def self.index_translation ; tree_indexes end
     def plant_index ; self.class.tree_indexes[tree_index] end
     def to_s ; super + " tree_index=#{tree_index}" end
 
     def wood ; materials.find {|m| m.id == 'WOOD' } end
+    def material_structural ; materials.find {|m| m.id == 'STRUCTURAL' } end
+
+    def material ; wood || material_structural || materials.first end
 
     def value   ; wood.material_value if wood end
     def color   ; wood.build_color if wood end
@@ -1092,14 +1112,14 @@ module DFStock
   end
 
   class BarOtherMaterial < Thing # FIXME: Manual list
-    # def self.barothermaterial_items ; %w(Coal Potash Ash Pearlash Soap) end
-    def self.barothermaterial_items # Note - not very consistent
+    def self.barothermaterial_items
+      # Note - not very consistent, the first four are archetypical, the later depends on its animal (in this case a toad)
       [
-        Builtin.new(7).material,
-        Builtin.new(8).material,
-        Builtin.new(9).material,
-        Builtin.new(10).material,
-        Creature.new(0).materials[21]
+        Builtin.new(7).material, # Coal
+        Builtin.new(8).material, # Potash
+        Builtin.new(9).material, # Ash
+        Builtin.new(10).material, # Pearlash
+        Creature.new(0).materials[21] # Soap
       ]
     end
     def self.barothermaterial_indexes ; (0 ... barothermaterial_items.length).to_a end
