@@ -67,9 +67,11 @@ module DFStock
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send flags_array_name
             list = stockklass.index_translation # This is the reason this is a consistent class method
-            list.each_with_index.map {|_, idx|
+            array = list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
             }
+            def array.[]= i, v ; self[i].set !!v end
+            array
           }
         else
           raise "Unknown type #{type}"
