@@ -96,7 +96,7 @@ module DFStock
     def self.inspect_cache ; internal_cache end
 
     def token ; 'NONE' end
-    def to_s ; "#{self.class.name} linked=#{linked?}#{" enabled=#{!!enabled?}" if linked?} token=#{token.inspect} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} token=#{token.inspect} index=#{index}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
     def link ; @link end
