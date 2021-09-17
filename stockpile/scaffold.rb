@@ -21,7 +21,7 @@ module DFStock
       desired_name, actual_name = desired_name.to_sym, actual_name
       array = [:array, desired_name, actual_name, stockklass]
       # p [:add_array, self, :array, array]
-      @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an && stockklass = sk }
+      @features.delete_if {|type, dn, an, sk| type == :array && desired_name == dn && actual_name == an && stockklass = sk }
       @features.push(array)
       desired_name
     end
@@ -30,7 +30,7 @@ module DFStock
     def add_flag desired_name, actual_name = desired_name
       flag = [:flag, desired_name, actual_name]
       # p [:add_flag, self, :flag, flag]
-      @features.delete_if {|kl, dn, an, sk| self == kl && desired_name == dn && actual_name == an }
+      @features.delete_if {|type, dn, an, _| type == :flag && desired_name == dn && actual_name == an }
       @features.push(flag)
       desired_name
     end
