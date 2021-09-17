@@ -291,6 +291,8 @@ if self.class.const_defined? :DFHack
 
     def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
+    def all_items ; categories.map {|_,c| c.all_items }.flatten end
+
     def status
 # "# of Incoming Stockpile Links: #{x.links.take_from_pile.length} - # of Outgoing Stockpile Links: #{x.links.give_to_pile.length}",
 # "# of Incoming Workshop Links: #{x.links.take_from_workshop.length} - # of Outgoing Workshop Links: #{x.links.give_to_workshop.length}",
