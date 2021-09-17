@@ -198,6 +198,19 @@ module DFStock
       }
     end
 
+    def all_items ; arrays.flatten end
+
+    def allow_all
+      all_items.each &:enable
+      flags.each {|flag| send "#{flag}=", true }
+      true
+    end
+    def block_all
+      all_items.each &:disable
+      flags.each {|flag| send "#{flag}=", false }
+      true
+    end
+
     def     set x ; parent_stockpile.stock_flags.send "#{stock_category_method}=", !!x ; enabled? end
     def     get   ; parent_stockpile.stock_flags.send "#{stock_category_method}" end
     def  enable   ; set true  end
@@ -314,7 +327,7 @@ if self.class.const_defined? :DFHack
         if category.respond_to? :quality_core
           p [:quality, name]
           # category.enable
-          # category.arrays.each {|array| arrays.each &:enable }
+          # category.allow_all
         else
           p [:no_quality, name]
           # category.disable

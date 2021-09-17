@@ -107,7 +107,7 @@ module DFStock
       return false unless material && material.heat
 
       magma_temp = 12000
-      mft = material.heat.mat_fixed_temp 
+      mft = material.heat.mat_fixed_temp
       return true  if mft && mft != 60001
 
       cdp = material.heat.colddam_point
