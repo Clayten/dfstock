@@ -27,7 +27,7 @@ module DFStock
     def self.organic_mat_categories ; DFHack::OrganicMatCategory::NUME.keys end
     def self.organic_category cat_name ; cat_name.is_a?(Numeric) ? cat_name : DFHack::OrganicMatCategory::NUME[cat_name] end
     def self.organic_types ; cache(:organics) { mat_table.organic_types.each_with_index.map {|ot,i| ot.zip mat_table.organic_indexes[i] } } end
-    def self.organic cat_name, index # eg: (34, :Fish) -> Creature_ID, Caste_ID
+    def self.organic cat_name, index # eg: (:Fish, 34) -> Creature_ID, Caste_ID
       cat_num = organic_category cat_name
       raise "Unknown category '#{cat_name.inspect}'" unless cat_num
       organic_types[cat_num][index]
@@ -71,11 +71,11 @@ module DFStock
     def disable   ; set false end
     def  toggle   ; set !enabled? end
 
-    def  tile_color ; material.tile_color end
-    def build_color ; material.build_color end
-    def basic_color ; material.basic_color end
-    def state_color ; material.state_color end
-    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } end
+    def  tile_color     ; material.tile_color  if material end
+    def build_color     ; material.build_color if material end
+    def basic_color     ; material.basic_color if material end
+    def state_color     ; material.state_color if material end
+    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if material end
     def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
 
     # Cache lookups - this is pretty important for performance
@@ -104,6 +104,8 @@ module DFStock
 
     def is_magma_safe?
       # p [:ims?, self, :material, material]
+      return false unless material && material.heat
+
       magma_temp = 12000
       mft = material.heat.mat_fixed_temp 
       return true  if mft && mft != 60001
@@ -353,7 +355,7 @@ module DFStock
     def self.creatures ; creature_indexes.each_index.map {|i| Creature.new i } end
     def self.index_translation ; creature_indexes end
 
-    def self.find_creature_by_organic index, cat_name ; creature_index, caste_num = organic(index, cat_name) ; creature_raws[creature_index].caste[caste_num] ; end
+    def self.find_creature_by_organic cat_name, index ; creature_index, caste_num = organic(cat_name, index) ; creature_raws[creature_index].caste[caste_num] ; end
 
     def self.find_creature_index raw ; creature_raws.index raw end
 
