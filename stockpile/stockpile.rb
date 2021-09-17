@@ -187,18 +187,19 @@ module DFStock
   # -> 12
   module StockFinder
 
-    # From the current classname, what's the method name the parent object uses to refer to you
-    def stock_category
-      name = self.class.to_s.split(/_T/).last.to_sym
-      {Animals: 'animals', Food: 'food', Furniture: 'furniture', Refuse: 'refuse', Stone: 'stone', Ammo: 'ammo', Coins: 'coins', BarsBlocks: 'bars_blocks',
-       Gems: 'gems', FinishedGoods: 'finished_goods', Leather: 'leather', Cloth: 'cloth', Wood: 'wood', Weapons: 'weapons', Armor: 'armor', Sheet: 'sheet'}[name]
+    def stock_category_name   ; DFHack::BuildingStockpilest.stock_category_name   self end
+    def stock_category_method ; DFHack::BuildingStockpilest.stock_category_method self end
+
+    # Look at all possible parents to find the one pointing to your memory
+    def parent_stockpile
+      ObjectSpace.each_object(DFHack::BuildingStockpilest).find {|sp|
+        sp.z rescue next # guard against something ...?
+        sp.send(stock_category_method)._memaddr == _memaddr
+      }
     end
 
-    # Look at all possible parents to find the one pointing to the same memory as your sub-object
-    def parent_stockpile ; ObjectSpace.each_object(DFHack::BuildingStockpilest).find {|sp| sp.z rescue next ; sp.send(stock_category)._memaddr == _memaddr } end
-
-    def     set x ; parent_stockpile.stock_flags.send "#{stock_category}=", x ; x end
-    def     get   ; parent_stockpile.stock_flags.send "#{stock_category}" end
+    def     set x ; parent_stockpile.stock_flags.send "#{stock_category_method}=", !!x ; enabled? end
+    def     get   ; parent_stockpile.stock_flags.send "#{stock_category_method}" end
     def  enable   ; set true  end
     def disable   ; set false end
     def enabled?  ; !!get end
@@ -226,6 +227,7 @@ if self.class.const_defined? :DFHack
   class DFHack::StockpileSettings_TWeapons       ; include DFStock::StockFinder, DFStock::WeaponsMod end
   class DFHack::StockpileSettings_TArmor         ; include DFStock::StockFinder, DFStock::ArmorMod end
   class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, DFStock::SheetMod end
+
   class DFHack::BuildingStockpilest
     def allow_organic      ; settings.allow_organic end
     def allow_organic=   b ; settings.allow_organic= b end
@@ -249,8 +251,32 @@ if self.class.const_defined? :DFHack
     def armor              ; settings.armor end
     def sheet              ; settings.sheet end
 
+    # From the classname of a category to the name the parent (this) uses to refer to that category
     # Categories in the order they appear in the stockpile
-    def categories ; [animals, food, furniture, refuse, stone, ammo, coins, bars_blocks, gems, finished_goods, leather, cloth, wood, weapons, armor, sheet] end
+    def self.stock_categories
+      {
+        Animals: 'animals',
+        Food: 'food',
+        Furniture: 'furniture',
+        Refuse: 'refuse',
+        Stone: 'stone',
+        Ammo: 'ammo',
+        Coins: 'coins',
+        BarsBlocks: 'bars_blocks',
+        Gems: 'gems',
+        FinishedGoods: 'finished_goods',
+        Leather: 'leather',
+        Cloth: 'cloth',
+        Wood: 'wood',
+        Weapons: 'weapons',
+        Armor: 'armor',
+        Sheet: 'sheet'
+      }
+    end
+    def self.stock_category_name obj ; obj.class.to_s.split(/_T/).last.to_sym end
+    def self.stock_category_method obj ; stock_categories[stock_category_name obj] end
+
+    def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
     def status
 # "# of Incoming Stockpile Links: #{x.links.take_from_pile.length} - # of Outgoing Stockpile Links: #{x.links.give_to_pile.length}",
@@ -272,15 +298,32 @@ if self.class.const_defined? :DFHack
       puts "Outgoing Workshop Links: #{links.give_to_workshop.length} #{
         links.give_to_workshop.map   {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
 
-      categories.each {|c|
-        k = c.class.to_s.sub(/^.+_T/,'')
+      categories.each {|k, c|
         puts "#{'%20s' % k} #{c.enabled?}"
       }
+      true
     end
 
     # Intended to quickly configure basic piles with some simple code like geekcode
     def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
     def to_s    ; puts "not implemented yet" ; raise end # the inverse of set
+
+    def set_artifacts
+      categories.each {|name, category|
+        p [:category, category.class, :name, name, :qualities, category.respond_to?(:quality_core), :enabled, (settings.flags.send(name) if settings.flags.respond_to?(name))]
+        if category.respond_to? :quality_core
+          p [:quality, name]
+          # category.enable
+          # category.arrays.each {|array| arrays.each &:enable }
+        else
+          p [:no_quality, name]
+          # category.disable
+        end
+      }
+      # disable non-artifactable categories
+      # try to enable artifactable cats - in the meantime, prompt
+      # disable non-artifact qualities
+    end
   end
 
   class DFHack::StockpileSettings
