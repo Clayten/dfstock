@@ -1099,23 +1099,6 @@ module DFStock
     end
   end
 
-  class Ammo < Thing # FIXME: Manual list
-    def self.ammo_items ; ['Bolts', 'Arrows', 'Blowdarts', 'Long Bolts', 'Short Bolts', 'Wide-headed Arrows'] end
-    def self.ammo_indexes ; (0 ... self.ammo_items.length).to_a end
-    def self.ammos ; ammo_indexes.map {|i| Ammo.new i } end
-    def self.index_translation ; ammo_indexes end
-
-    def natural_state ; {0 => :Liquid, 1 => :Solid}[ammo_index] end
-    def token ; self.class.ammo_items[ammo_index] end
-    def to_s ; super + " ammo_index=#{ammo_index}" end
-
-    attr_reader :ammo_index
-    def initialize index, link: nil
-      @ammo_index = index
-      super
-    end
-  end
-
   class AmmoOtherMaterial < Thing # FIXME: Manual list
     def self.ammoothermaterial_items ; ['Wood', 'Bone'] end
     def self.ammoothermaterial_indexes ; (0 ... ammoothermaterial_items.length).to_a end
@@ -1288,6 +1271,24 @@ module DFStock
     end
   end
 
+  class Ammo < Item
+    def self.ammo_indexes ; item_raws.each_with_index.select {|i,_| i.class == DFHack::ItemdefAmmost }.map {|_,i| i } end
+    def self.ammos ; ammo_indexes.each_index.map {|i| Ammo.new i } end
+    def self.index_translation ; ammo_indexes end
+
+    def item_index ; self.class.ammo_indexes[ammo_index] end
+
+    def natural_state ; {0 => :Liquid, 1 => :Solid}[ammo_index] end
+    def token ; [raw.adjective, raw.name_plural].reject(&:empty?).map(&:capitalize).join(' ') end
+    def to_s ; super + " ammo_index=#{ammo_index}" end
+
+    attr_reader :ammo_index
+    def initialize index, link: nil
+      @ammo_index = index
+      super
+    end
+  end
+
   # Bool array is large enough for weapons, not all items.
   class Weapon < Item
     def self.weapon_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefWeaponst }.map {|x,i| i } end
@@ -1295,7 +1296,6 @@ module DFStock
     def self.index_translation ; weapon_indexes end
 
     def item_index ; self.class.weapon_indexes[weapon_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " weapon_index=#{weapon_index}" end
@@ -1313,7 +1313,6 @@ module DFStock
     def self.index_translation ; trapweapon_indexes end
 
     def item_index ; self.class.trapweapon_indexes[trapweapon_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " trapweapon_index=#{trapweapon_index}" end
@@ -1331,7 +1330,6 @@ module DFStock
     def self.index_translation ; armorbody_indexes end
 
     def item_index ; self.class.armorbody_indexes[armorbody_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorbody_index=#{armorbody_index}" end
@@ -1349,7 +1347,6 @@ module DFStock
     def self.index_translation ; armorhead_indexes end
 
     def item_index ; self.class.armorhead_indexes[armorhead_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorhead_index=#{armorhead_index}" end
@@ -1367,7 +1364,6 @@ module DFStock
     def self.index_translation ; armorfeet_indexes end
 
     def item_index ; self.class.armorfeet_indexes[armorfeet_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorfeet_index=#{armorfeet_index}" end
@@ -1385,7 +1381,6 @@ module DFStock
     def self.index_translation ; armorhand_indexes end
 
     def item_index ; self.class.armorhand_indexes[armorhand_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorhand_index=#{armorhand_index}" end
@@ -1403,7 +1398,6 @@ module DFStock
     def self.index_translation ; armorleg_indexes end
 
     def item_index ; self.class.armorleg_indexes[armorleg_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorleg_index=#{armorleg_index}" end
@@ -1421,7 +1415,6 @@ module DFStock
     def self.index_translation ; armorshield_indexes end
 
     def item_index ; self.class.armorshield_indexes[armorshield_index] end
-    def raw ; self.class.item_raws[item_index] end
 
     def token ; title_case super end
     def to_s ; super + " armorshield_index=#{armorshield_index}" end
