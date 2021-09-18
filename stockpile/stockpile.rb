@@ -202,12 +202,12 @@ module DFStock
 
     def allow_all
       all_items.each &:enable
-      flags.each {|flag| send "#{flag}=", true }
+      flags.each {|flag, _| send "#{flag}=", true }
       true
     end
     def block_all
       all_items.each &:disable
-      flags.each {|flag| send "#{flag}=", false }
+      flags.each {|flag, _| send "#{flag}=", false }
       true
     end
 
@@ -323,21 +323,49 @@ if self.class.const_defined? :DFHack
     def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
     def to_s    ; puts "not implemented yet" ; raise end # the inverse of set
 
+    # disable non-artifactable categories
+    # try to enable artifactable cats - in the meantime, prompt
+    # disable non-artifact qualities
     def set_artifacts
       categories.each {|name, category|
-        p [:category, category.class, :name, name, :qualities, category.respond_to?(:quality_core), :enabled, (settings.flags.send(name) if settings.flags.respond_to?(name))]
         if category.respond_to? :quality_core
-          p [:quality, name]
+          next p [:please_enable, name] unless category.enabled?
           # category.enable
-          # category.allow_all
+          category.allow_all
+          category.quality_total[0...-1].each(&:disable)
         else
-          p [:no_quality, name]
-          # category.disable
+          category.disable
         end
       }
-      # disable non-artifactable categories
-      # try to enable artifactable cats - in the meantime, prompt
-      # disable non-artifact qualities
+    end
+
+    def set_no_artifacts
+      categories.each {|name, category|
+        if category.respond_to? :quality_core
+          category.quality_core.last.disable
+          category.quality_total.last.disable
+        end
+      }
+    end
+  end
+
+  module DFStock
+    def self.buildings_by_type type
+      raise "No handler for #{type}" unless method = {stockpile: :STOCKPILE}[type]
+      df.world.buildings.other.send(method)
+    end
+    def self.set_artifacts
+      stockpiles = buildings_by_type(:stockpile)
+      artifacts, regular = stockpiles.partition {|s| s.name =~ /artifacts/i }
+      if artifacts.empty?
+        puts "Name one stockpile 'Artifacts'"
+        return false
+      elsif artifacts.length > 1
+        puts "You should only have one Artifacts stockpile"
+        return false
+      end
+      artifacts.each &:set_artifacts
+      regular.each &:set_no_artifacts
     end
   end
 
