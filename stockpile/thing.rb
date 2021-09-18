@@ -1427,12 +1427,12 @@ module DFStock
   end
 
   class Quality < Thing
-    def self.quality_names ; DFHack::ItemQuality::NUME.keys end
-    def self.quality_indexes ; (0 ... quality_names.length).to_a end
+    def self.quality_levels ; DFHack::ItemQuality::NUME.keys end
+    def self.quality_indexes ; (0 ... quality_levels.length).to_a end
     def self.index_translation ; quality_indexes end
     def self.qualities ; (0 ... index_translation.length).map {|i| new i } end
 
-    def quality ; self.class.quality_names[quality_index] end
+    def quality ; self.class.quality_levels[quality_index] end
     def token ; quality.to_s end
     def to_s ; "#{super} @quality_index=#{quality_index}" end
 
