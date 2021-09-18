@@ -50,7 +50,7 @@ module DFStock
       @features.each {|type, desired_name, actual_name, stockklass|
         actual_name ||= desired_name
         if :flag == type
-          base_name = "flags_#{actual_name}".to_sym
+          base_name = "flag_#{actual_name}".to_sym
           flags << [desired_name, actual_name, base_name]
           if !method_defined? base_name
             klass.class_eval "alias #{base_name} #{actual_name}"
@@ -59,7 +59,7 @@ module DFStock
           # p [:define_flag, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
 
         elsif :array == type
-          base_name = "arrays_#{actual_name}".to_sym
+          base_name = "array_#{actual_name}".to_sym
           arrays << [desired_name, actual_name, base_name]
           if !klass.method_defined? base_name
             raise "Ack!" unless klass.instance_methods.include?(actual_name)
@@ -80,11 +80,18 @@ module DFStock
       }
 
       klass.send(:define_method, :arrays) {
-        desired_names = arrays.map {|desired_name, _, _| desired_name }.uniq
+        desired_names = arrays.map {|desired_name, _, _| desired_name }
         pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
         Hash[*pairs]
       }
-      klass.send(:define_method, :flags) { flags }
+      klass.send(:define_method, :flags) {
+        desired_names = flags.map {|desired_name, _, _| desired_name }
+        pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
+        Hash[*pairs]
+      }
+      features = @features.dup
+      # p [:features, features]
+      klass.send(:define_method, :features) { features }
 
       wrappers = arrays + flags
       wrapper_count = Hash.new {|h,k| h[k] = 0 }
