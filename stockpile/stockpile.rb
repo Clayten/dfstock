@@ -198,7 +198,7 @@ module DFStock
       }
     end
 
-    def all_items ; arrays.flatten end
+    def all_items ; arrays.values.flatten end
 
     def allow_all
       all_items.each &:enable

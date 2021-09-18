@@ -17,7 +17,7 @@ module DFStock
     end
 
     # This is called during class-definition at load-time
-    def add_array stockklass, desired_name, actual_name = desired_name
+    def add_array stockklass, desired_name, actual_name = nil
       desired_name, actual_name = desired_name.to_sym, actual_name
       array = [:array, desired_name, actual_name, stockklass]
       # p [:add_array, self, :array, array]
@@ -27,7 +27,7 @@ module DFStock
     end
 
     # This is called during class-definition at load-time
-    def add_flag desired_name, actual_name = desired_name
+    def add_flag desired_name, actual_name = nil
       flag = [:flag, desired_name, actual_name]
       # p [:add_flag, self, :flag, flag]
       @features.delete_if {|type, dn, an, _| type == :flag && desired_name == dn && actual_name == an }
@@ -48,24 +48,26 @@ module DFStock
       flags = []
       arrays = []
       @features.each {|type, desired_name, actual_name, stockklass|
+        actual_name ||= desired_name
         if :flag == type
-          flags << desired_name
-          next if desired_name == actual_name # no-op
-          klass.class_eval "alias #{desired_name} #{actual_name}" unless klass.method_defined?(desired_name)
-        elsif :array == type
-          arrays << desired_name
-          if desired_name == actual_name
-            original_name = "original_#{desired_name}"
-            if !method_defined? original_name
-              klass.class_eval "alias #{original_name} #{actual_name}" unless klass.method_defined?(original_name)
-              klass.class_eval { undef_method actual_name }
-            end
+          base_name = "flags_#{actual_name}".to_sym
+          flags << [desired_name, actual_name, base_name]
+          if !method_defined? base_name
+            klass.class_eval "alias #{base_name} #{actual_name}"
+            klass.class_eval "alias #{desired_name} #{base_name}"
           end
+          # p [:define_flag, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
 
-          flags_array_name = original_name || actual_name
-          # p [:define_method, self, klass, desired_name]
+        elsif :array == type
+          base_name = "arrays_#{actual_name}".to_sym
+          arrays << [desired_name, actual_name, base_name]
+          if !klass.method_defined? base_name
+            raise "Ack!" unless klass.instance_methods.include?(actual_name)
+            klass.class_eval "alias #{base_name} #{actual_name}"
+          end
+          # p [:define_array, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
           klass.send(:define_method, desired_name) {|&b|
-            flags_array = send flags_array_name
+            flags_array = send base_name
             list = stockklass.index_translation # This is the reason this is a consistent class method
             array = list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
@@ -73,12 +75,32 @@ module DFStock
             def array.[]= i, v ; self[i].set !!v end
             array
           }
-        else
-          raise "Unknown type #{type}"
-        end
+
+        else ; raise "Unknown type #{type}" end
       }
-      klass.send(:define_method, :arrays) { arrays.map {|a| send a } }
-      klass.send(:define_method, :flags)  { flags }
+
+      klass.send(:define_method, :arrays) {
+        desired_names = arrays.map {|desired_name, _, _| desired_name }.uniq
+        pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
+        Hash[*pairs]
+      }
+      klass.send(:define_method, :flags) { flags }
+
+      wrappers = arrays + flags
+      wrapper_count = Hash.new {|h,k| h[k] = 0 }
+      wrappers.each {|dn,an,bn| wrapper_count[an] += 1 }
+      simple_wrappers, shared_wrappers = wrappers.partition {|dn, an, bn| wrapper_count[an] == 1 }
+
+      simple_wrappers.each {|desired_name, actual_name, _|
+        next if actual_name == desired_name
+        klass.class_eval { undef_method actual_name }
+        klass.class_eval "alias #{actual_name} #{desired_name}"
+      }
+      shared_wrappers.each {|desired_name, actual_name, base_name|
+        wrapped_methods = wrappers.select {|d,a,b| a == actual_name }.map {|d,a,b| d }
+        klass.class_eval { undef_method actual_name }
+        klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end"
+      }
     end
   end
 
