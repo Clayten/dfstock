@@ -765,7 +765,7 @@ module DFStock
     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
     def edible?         ; edible_cooked? || edible_raw? end
-    def brewable?       ; material_flags[:ALCOHOL_PLANT] end
+    def brewable?       ; material_flags[:ALCOHOL_PLANT] && !%w(DRINK SEED MILL).include?(material.id) end
     def millable?       ; mill? end
 
     def tree? ; raw.flags[:TREE] end
@@ -856,8 +856,14 @@ module DFStock
   end
 
   class PlantPowder < Plant
-    def self.plantpowder_indexes ; cache(:plantpowders) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
+    def self.plantpowder_category ; organic_category :PlantPowder end
+    def self.plantpowder_types ; organic_types[plantpowder_category] end
+    def self.plantpowder_material_infos ; plantpowder_types.map {|(c,i)| material_info c, i } end
+    def self.plantpowder_indexes ; (0 ... plantpowder_types.length).to_a end
     def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
+
+    # def self.plantpowder_indexes ; cache(:plantpowders) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
+    # def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
     def self.index_translation ; plantpowder_indexes end
 
     def plant_index ; self.class.plantpowder_indexes[plantpowder_index] end
