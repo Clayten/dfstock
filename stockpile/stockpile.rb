@@ -326,7 +326,9 @@ if self.class.const_defined? :DFHack
     # disable non-artifactable categories
     # try to enable artifactable cats - in the meantime, prompt
     # disable non-artifact qualities
-    def set_artifacts
+    def setup_artifacts
+      puts "Setting up artifacts pile"
+      puts "Your artifacts pile should be named 'ArtifactsP'" if name != 'ArtifactsP'
       categories.each {|name, category|
         if category.respond_to? :quality_core
           next p [:please_enable, name] unless category.enabled?
@@ -340,12 +342,91 @@ if self.class.const_defined? :DFHack
     end
 
     def set_no_artifacts
+      puts "Your non-artifacts pile should NOT be named 'ArtifactsP'" if name == 'ArtifactsP'
       categories.each {|name, category|
         if category.respond_to? :quality_core
           category.quality_core.last.disable
           category.quality_total.last.disable
         end
       }
+    end
+
+    def set_kitchen
+      puts "Your kitchen pile should be named 'KitchenP'" if name != 'KitchenP'
+      puts "Setting up kitchen pile #{id}"
+      food.all_items.each {|food|
+        next food.disable unless food.respond_to? :edible_cooked?
+        brewable = food.respond_to?(:brewable?) && food.brewable?
+        food.set(food.edible_cooked? && !brewable)
+      }
+      food.fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
+      food.animal_extract.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
+      # technically cookable, but wasteful without proper management
+      food.seeds.each(&:disable)
+      food.plant_drink.each(&:disable)
+      food.animal_drink.each(&:disable)
+
+      if !check_for_link 'Kitchen', type: :workshop
+        puts "Your kitchen stockpile should be linked to a Kitchen named 'Kitchen'."
+      end
+    end
+
+    def set_prep_kitchen
+      puts "Your prep-kitchen pile should be named 'Prep KitchenP'" if name != 'Prep KitchenP'
+      puts "Setting up prep-kitchen pile #{id}"
+      food.block_all
+      food.fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
+
+      if !check_for_link 'Prep Kitchen', type: :workshop
+        puts "Your prep kitchen stockpile should be linked to a Kitchen named 'Prep Kitchen'."
+      end
+    end
+
+    def set_brewery
+      puts "Your brewery pile should be named 'BreweryP'" if name != 'BreweryP'
+      puts "Setting up brewery #{id}"
+      food.all_items.each {|food|
+        next food.disable unless food.respond_to? :brewable?
+        food.set food.brewable?
+      }
+
+      if !check_for_link 'Brewery', type: :workshop
+        puts "Your brewery stockpile should be linked to a Still named 'Brewery'."
+      end
+    end
+
+    def setup_by_name
+      case name
+      when 'KitchenP'      ; set_kitchen
+      when 'Prep KitchenP' ; set_prep_kitchen
+      when 'BreweryP'      ; set_brewery
+      when 'ArtifactsP'    ; set_artifacts
+      else ; # puts "Skipping unknown type of stockpile - id: #{id}, name: #{name}"
+      end
+      set_no_artifacts unless name == 'ArtifactsP'
+    end
+  end
+  
+  class ::DFHack::Building
+    def get_links
+      links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
+      if respond_to? :links
+        links[:stockpile][:give] =        self.links.give_to_pile.to_a
+        links[:stockpile][:take] =        self.links.take_from_pile.to_a
+        links[:workshop ][:give] =        self.links.give_to_workshop.to_a
+        links[:workshop ][:take] =        self.links.take_from_workshop.to_a
+      elsif respond_to? :getStockpileLinks
+        links[:stockpile][:give] = getStockpileLinks.give_to_pile.to_a
+        links[:stockpile][:take] = getStockpileLinks.take_from_pile.to_a
+      end
+      links
+    end
+
+    def check_for_link name, type: :stockpile, direction: :give
+      if !respond_to? :links
+        raise "This type of building can't have workshop links"
+      end
+      get_links[type][direction].any? {|l| l.name == name }
     end
   end
 
@@ -354,18 +435,35 @@ if self.class.const_defined? :DFHack
       raise "No handler for #{type}" unless method = {stockpile: :STOCKPILE}[type]
       df.world.buildings.other.send(method)
     end
-    def self.set_artifacts
+
+    def self.check_artifacts
       stockpiles = buildings_by_type(:stockpile)
       artifacts, regular = stockpiles.partition {|s| s.name =~ /artifacts/i }
-      if artifacts.empty?
-        puts "Name one stockpile 'Artifacts'"
-        return false
-      elsif artifacts.length > 1
+      if artifacts.length > 1
         puts "You should only have one Artifacts stockpile"
         return false
       end
-      artifacts.each &:set_artifacts
-      regular.each &:set_no_artifacts
+    end
+
+    def self.check_for_stockpiles
+      stockpiles = buildings_by_type(:stockpile)
+      types = %w(kitchen prep_kitchen brewery artifacts)
+      types.each {|type|
+        pile_name = type.gsub(/_/,' ').split(/\s+/).map(&:capitalize).join(' ') + 'P'
+        piles = stockpiles.select {|s| s.name == pile_name }
+        puts "You should have a stockpile named #{pile_name}" if piles.empty?
+      }
+      true
+    end
+
+    def self.setup_stockpiles
+      puts "Performing automatic name-based stockpile setup and linkage"
+
+      check_for_stockpiles
+      check_artifacts
+
+      stockpiles = buildings_by_type(:stockpile)
+      stockpiles.each &:setup_by_name
     end
   end
 
