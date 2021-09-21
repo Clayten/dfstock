@@ -52,20 +52,20 @@ module DFStock
         if :flag == type
           base_name = "flag_#{actual_name}".to_sym
           flags << [desired_name, actual_name, base_name]
+          # p [:define_flag, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
           if !method_defined? base_name
             klass.class_eval "alias #{base_name} #{actual_name}"
             klass.class_eval "alias #{desired_name} #{base_name}"
           end
-          # p [:define_flag, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
 
         elsif :array == type
           base_name = "array_#{actual_name}".to_sym
           arrays << [desired_name, actual_name, base_name]
+          # p [:define_array, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
           if !klass.method_defined? base_name
             raise "Ack!" unless klass.instance_methods.include?(actual_name)
             klass.class_eval "alias #{base_name} #{actual_name}"
           end
-          # p [:define_array, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send base_name
             list = stockklass.index_translation # This is the reason this is a consistent class method
