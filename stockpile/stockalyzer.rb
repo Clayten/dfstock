@@ -1,5 +1,6 @@
 # Analyzes stock flow into and out of shops, piles, and QSPs
 module DFStockalyzer
+  extend DwarfFortressUtils::API
   class << self
     def buildings ; df.world.buildings.all end
 
@@ -65,17 +66,19 @@ module DFStockalyzer
     def analyze
       links = Hash.new {|h,k| h[k] = [] }
 
+      # and track stops
       stockpiles.each {|sp|
+        p [:sp, sp.id, sp.name, sp.getType]
         gp, tp, gw, tw = %w(give_to_pile take_from_pile give_to_workshop take_from_workshop).map {|n| sp.links.send(n).to_a }
-        [gp, gw].flatten.each {|ws| links[sp.id] << ws.id }
-                      tw.each {|ws| links[ws.id] << sp.id }
-        [ sp.links.give_to_pile, sp.links.give_to_workshop].map {|wsl| wsl.flatten }.flatten.each {|ws| links[sp.id] << ws.id }
-        sp.links.take_from_workshop.flatten.each {|ws| links[sp.id] << ws.id }
+        links[[sp.id, sp.name]]
+        gp.each {|pl| links[[pl.id, pl.name]] << [:sp, sp.id, sp.name] }
+        gw.each {|ws| links[[ws.id, ws.name]] << [:sw, sp.id, sp.name] }
+        tp.each {|pl| links[[sp.id, sp.name]] << [:wp, pl.id, pl.name] }
+        tw.each {|ws| links[[sp.id, sp.name]] << [:ww, ws.id, ws.name] }
       }
 
       links
     end
-
 
     # Links are {id => [id, id, id]}
     def pretty_print links
@@ -228,6 +231,10 @@ module DFStock
     stockpiles = buildings_by_type(:stockpile)
     stockpiles.each &:setup_by_name
   end
+
+  # # Name gives to Name2
+  # def check_for_link name, name2
+  # end
 end
 
 class ::DFHack::Building
@@ -246,9 +253,9 @@ class ::DFHack::Building
   end
 
   def check_for_link name, type: :stockpile, direction: :give
-    if !respond_to? :links
-      raise "This type of building can't have workshop links"
-    end
-    get_links[type][direction].any? {|l| l.name == name }
+    method = (direction == :give ? 'give_to_' : 'take_from_') + (type == :stockpile ? 'pile' : 'workshop')
+    all_links = send(getType == :Stockpile ? :links : :getStockpileLinks)
+    links = all_links.send method
+    links.any? {|link| link.name == name}
   end
 end

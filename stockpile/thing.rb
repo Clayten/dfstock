@@ -1123,7 +1123,7 @@ module DFStock
 
   class BarOtherMaterial < Thing # FIXME: Manual list
     def self.barothermaterial_items
-      # Note - not very consistent, the first four are archetypical, the later depends on its animal (in this case a toad)
+      # Note - not very consistent, the first four are archetypal, the later depends on its animal (in this case a toad)
       [
         Builtin.new(7).material, # Coal
         Builtin.new(8).material, # Potash
