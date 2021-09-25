@@ -148,12 +148,11 @@ class DFHack::BuildingStockpilest
       brewable = food.respond_to?(:brewable?) && food.brewable?
       food.set(food.edible_cooked? && !brewable)
     }
-    food.fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
-    food.animal_extract.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
-    # technically cookable, but wasteful without proper management
-    food.seeds.each(&:disable)
-    food.plant_drink.each(&:disable)
-    food.animal_drink.each(&:disable)
+    food.glob_fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
+    food.liquid_animal.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
+    food.seeds.each(&:disable) # technically cookable, but wasteful without proper management
+    food.drink_plant.each(&:disable)
+    food.drink_animal.each(&:disable)
 
     if !check_for_link 'Kitchen', type: :workshop
       puts "Your kitchen stockpile should be linked to a Kitchen named 'Kitchen'."
@@ -164,7 +163,7 @@ class DFHack::BuildingStockpilest
     puts "Your prep-kitchen pile should be named 'Prep KitchenP'" if name != 'Prep KitchenP'
     puts "Setting up prep-kitchen pile #{id}"
     food.block_all
-    food.fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
+    food.glob_fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
 
     if !check_for_link 'Prep Kitchen', type: :workshop
       puts "Your prep kitchen stockpile should be linked to a Kitchen named 'Prep Kitchen'."

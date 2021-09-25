@@ -26,28 +26,28 @@ module DFStock
     add_array(UnpreparedFish,   :unprepared_fish)
     add_array(Egg,              :egg)
     add_array(PlantProduct,     :plants)
-    add_array(PlantDrink,       :plant_drink,     :drink_plant)
-    add_array(CreatureDrink,    :animal_drink,    :drink_animal)
-    add_array(PlantCheese,      :plant_cheese,    :cheese_plant)
-    add_array(CreatureCheese,   :creature_cheese, :cheese_animal)
+    add_array(PlantDrink,       :drink_plant)
+    add_array(CreatureDrink,    :drink_animal)
+    add_array(PlantCheese,      :cheese_plant)
+    add_array(CreatureCheese,   :cheese_animal)
     add_array(Seed,             :seeds)
     add_array(FruitLeaf,        :leaves)
-    add_array(PlantPowder,      :plant_powder,    :powder_plant)
-    add_array(CreaturePowder,   :animal_powder,   :powder_creature)
-    add_array(Fat,              :fat,             :glob)
-    add_array(Paste,            :paste,           :glob_paste)
-    add_array(Pressed,          :pressed,         :glob_pressed)
-    add_array(PlantExtract,     :plant_extract,   :liquid_plant)
-    add_array(CreatureExtract,  :animal_extract,  :liquid_animal)
-    add_array(MiscLiquid,       :misc_liquid,     :liquid_misc)
+    add_array(PlantPowder,      :powder_plant)
+    add_array(CreaturePowder,   :powder_creature)
+    add_array(Fat,              :glob_fat,        :glob)
+    add_array(Paste,            :glob_paste)
+    add_array(Pressed,          :glob_pressed)
+    add_array(PlantExtract,     :liquid_plant)
+    add_array(CreatureExtract,  :liquid_animal)
+    add_array(MiscLiquid,       :liquid_misc)
   end
 
   module FurnitureMod
     extend Scaffold
     add_array(Furniture,              :type)
-    add_array(CutStone,               :stones, :mats)
-    add_array(Metal,                  :metals, :mats)
-    add_array(FurnitureOtherMaterial, :other_mats)
+    add_array(CutStone,               :stones,          :mats)
+    add_array(Metal,                  :metals,          :mats)
+    add_array(FurnitureOtherMaterial, :other_materials, :other_mats)
     add_array(Quality,                :quality_core)
     add_array(Quality,                :quality_total)
   end
@@ -69,19 +69,19 @@ module DFStock
 
   module StoneMod
     extend Scaffold
-    add_array(Ore, :ore, :mats)
+    add_array(Ore,           :ore,      :mats)
     add_array(EconomicStone, :economic, :mats)
-    add_array(OtherStone, :other, :mats)
-    add_array(Clay, :clay, :mats)
+    add_array(OtherStone,    :other,    :mats)
+    add_array(Clay,          :clay,     :mats)
   end
 
   module AmmoMod
     extend Scaffold
-    add_array(Ammo, :type)
-    add_array(Metal, :metals, :mats)
-    add_array(AmmoOtherMaterial, :other_mats)
-    add_array(Quality, :quality_core)
-    add_array(Quality, :quality_total)
+    add_array(Ammo,              :type)
+    add_array(Metal,             :metals,          :mats)
+    add_array(AmmoOtherMaterial, :other_materials, :other_mats)
+    add_array(Quality,           :quality_core)
+    add_array(Quality,           :quality_total)
   end
 
   module CoinMod
@@ -110,10 +110,10 @@ module DFStock
   module FinishedGoodsMod
     extend Scaffold
     add_array(FinishedGood,               :type)
-    add_array(CutStone,                   :stones, :mats)
-    add_array(Metal,                      :metals, :mats)
-    add_array(Gem,                        :gems,   :mats)
-    add_array(FinishedGoodsOtherMaterial, :other_mats)
+    add_array(CutStone,                   :stones,          :mats)
+    add_array(Metal,                      :metals,          :mats)
+    add_array(Gem,                        :gems,            :mats)
+    add_array(FinishedGoodsOtherMaterial, :other_materials, :other_mats)
     add_array(Quality,                    :quality_core)
     add_array(Quality,                    :quality_total)
   end
@@ -125,14 +125,14 @@ module DFStock
 
   module ClothMod
     extend Scaffold
-    add_array(Silk,         :silk_thread, :thread_silk)
-    add_array(PlantFiber,  :plant_thread, :thread_plant)
-    add_array(Yarn,         :yarn_thread, :thread_yarn)
-    add_array(MetalThread, :metal_thread, :thread_metal)
-    add_array(Silk,          :silk_cloth, :cloth_silk)
-    add_array(PlantFiber,   :plant_cloth, :cloth_plant)
-    add_array(Yarn,          :yarn_cloth, :cloth_yarn)
-    add_array(MetalThread,  :metal_cloth, :cloth_metal)
+    add_array(Silk,         :thread_silk)
+    add_array(PlantFiber,   :thread_plant)
+    add_array(Yarn,         :thread_yarn)
+    add_array(MetalThread,  :thread_metal)
+    add_array(Silk,         :cloth_silk)
+    add_array(PlantFiber,   :cloth_plant)
+    add_array(Yarn,         :cloth_yarn)
+    add_array(MetalThread,  :cloth_metal)
   end
 
   module WoodMod
@@ -144,11 +144,11 @@ module DFStock
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    add_array(Weapon,              :weapons, :weapon_type)
-    add_array(TrapWeapon,          :traps,   :trapcomp_type)
-    add_array(Metal,               :metals,  :mats)
-    add_array(CutStone,            :stones,  :mats)
-    add_array(WeaponOtherMaterial, :other_mats)
+    add_array(Weapon,              :weapons,         :weapon_type)
+    add_array(TrapWeapon,          :traps,           :trapcomp_type)
+    add_array(Metal,               :metals,          :mats)
+    add_array(CutStone,            :stones,          :mats)
+    add_array(WeaponOtherMaterial, :other_materials, :other_mats)
     add_array(Quality,             :quality_core)
     add_array(Quality,             :quality_total)
   end
@@ -163,15 +163,15 @@ module DFStock
     add_array(ArmorHand,           :hands)
     add_array(ArmorLeg,            :legs)
     add_array(ArmorShield,         :shield)
-    add_array(Metal,               :metals, :mats)
-    add_array(WeaponOtherMaterial, :other_mats)
+    add_array(Metal,               :metals,          :mats)
+    add_array(WeaponOtherMaterial, :other_materials, :other_mats)
     add_array(Quality,             :quality_core)
     add_array(Quality,             :quality_total)
   end
 
   module SheetMod
     extend Scaffold
-    add_array(Paper, :paper)
+    add_array(Paper,     :paper)
     add_array(Parchment, :parchment)
   end
 
