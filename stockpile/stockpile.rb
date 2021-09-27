@@ -15,7 +15,7 @@ module DFStock
     extend Scaffold
     add_flag(:empty_traps)
     add_flag(:empty_cages)
-    add_array(Animal, :animals, :enabled)
+    add_array(Animal, :enabled, :animals)
   end
 
   module FoodMod
@@ -34,7 +34,7 @@ module DFStock
     add_array(FruitLeaf,        :leaves)
     add_array(PlantPowder,      :powder_plant)
     add_array(CreaturePowder,   :powder_creature)
-    add_array(Fat,              :glob_fat,        :glob)
+    add_array(Fat,              :glob,        :glob_fat)
     add_array(Paste,            :glob_paste)
     add_array(Pressed,          :glob_pressed)
     add_array(PlantExtract,     :liquid_plant)
@@ -45,9 +45,9 @@ module DFStock
   module FurnitureMod
     extend Scaffold
     add_array(Furniture,              :type)
-    add_array(CutStone,               :stones,          :mats)
-    add_array(Metal,                  :metals,          :mats)
-    add_array(FurnitureOtherMaterial, :other_materials, :other_mats)
+    add_array(CutStone,               :mats,          :stones)
+    add_array(Metal,                  :mats,          :metals)
+    add_array(FurnitureOtherMaterial, :other_mats,    :other_materials)
     add_array(Quality,                :quality_core)
     add_array(Quality,                :quality_total)
   end
@@ -69,58 +69,58 @@ module DFStock
 
   module StoneMod
     extend Scaffold
-    add_array(Ore,           :ore,      :mats)
-    add_array(EconomicStone, :economic, :mats)
-    add_array(OtherStone,    :other,    :mats)
-    add_array(Clay,          :clay,     :mats)
+    add_array(Ore,           :mats, :ore)
+    add_array(EconomicStone, :mats, :economic)
+    add_array(OtherStone,    :mats, :other)
+    add_array(Clay,          :mats, :clay)
   end
 
   module AmmoMod
     extend Scaffold
     add_array(Ammo,              :type)
-    add_array(Metal,             :metals,          :mats)
-    add_array(AmmoOtherMaterial, :other_materials, :other_mats)
+    add_array(Metal,             :mats,       :metals)
+    add_array(AmmoOtherMaterial, :other_mats, :other_materials)
     add_array(Quality,           :quality_core)
     add_array(Quality,           :quality_total)
   end
 
   module CoinMod
     extend Scaffold
-    # add_array(Metal, :metals, :mats) # NOTE: Seems bugged, should just be metals, right...?
+    # add_array(Metal, :mats, :metals) # NOTE: Seems bugged, should just be metals, right...?
   end
 
   module BarsBlocksMod
     extend Scaffold
-    add_array(Metal,              :bars_metals,   :bars_mats)
-    add_array(BarOtherMaterial,   :bars_other,    :bars_other_mats)
-    add_array(CutStone,           :blocks_stone,  :blocks_mats)
-    add_array(Metal,              :blocks_metals, :blocks_mats)
-    add_array(BlockOtherMaterial, :blocks_other,  :blocks_other_mats)
+    add_array(Metal,              :bars_mats,         :bars_metals)
+    add_array(BarOtherMaterial,   :bars_other_mats,   :bars_other)
+    add_array(CutStone,           :blocks_mats,       :blocks_stone)
+    add_array(Metal,              :blocks_mats,       :blocks_metals)
+    add_array(BlockOtherMaterial, :blocks_other_mats, :blocks_other)
   end
 
   module GemsMod
     extend Scaffold
-    add_array(Gem,      :rough_gems,  :rough_mats)
-    add_array(Glass,    :rough_glass, :rough_other_mats)
-    add_array(Gem,      :cut_gems,    :cut_mats)
-    add_array(CutStone, :cut_stone,   :cut_mats)
-    add_array(Glass,    :cut_glass,   :cut_other_mats)
+    add_array(Gem,      :rough_mats,       :rough_gems)
+    add_array(Glass,    :rough_other_mats, :rough_glass)
+    add_array(Gem,      :cut_mats,         :cut_gems)
+    add_array(CutStone, :cut_mats,         :cut_stone)
+    add_array(Glass,    :cut_other_mats,   :cut_glass)
   end
 
   module FinishedGoodsMod
     extend Scaffold
     add_array(FinishedGood,               :type)
-    add_array(CutStone,                   :stones,          :mats)
-    add_array(Metal,                      :metals,          :mats)
-    add_array(Gem,                        :gems,            :mats)
-    add_array(FinishedGoodsOtherMaterial, :other_materials, :other_mats)
+    add_array(CutStone,                   :mats,       :stones)
+    add_array(Metal,                      :mats,       :metals)
+    add_array(Gem,                        :mats,       :gems)
+    add_array(FinishedGoodsOtherMaterial, :other_mats, :other_materials)
     add_array(Quality,                    :quality_core)
     add_array(Quality,                    :quality_total)
   end
 
   module LeatherMod
     extend Scaffold
-    add_array(Leather, :leather, :mats)
+    add_array(Leather, :mats, :leather)
   end
 
   module ClothMod
@@ -137,18 +137,18 @@ module DFStock
 
   module WoodMod
     extend Scaffold
-    add_array(Tree, :tree, :mats)
+    add_array(Tree, :mats, :tree)
   end
 
   module WeaponsMod
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    add_array(Weapon,              :weapons,         :weapon_type)
-    add_array(TrapWeapon,          :traps,           :trapcomp_type)
-    add_array(Metal,               :metals,          :mats)
-    add_array(CutStone,            :stones,          :mats)
-    add_array(WeaponOtherMaterial, :other_materials, :other_mats)
+    add_array(Weapon,              :weapon_type,   :weapons)
+    add_array(TrapWeapon,          :trapcomp_type, :traps)
+    add_array(Metal,               :mats,          :metals)
+    add_array(CutStone,            :mats,          :stones)
+    add_array(WeaponOtherMaterial, :other_mats,    :other_materials)
     add_array(Quality,             :quality_core)
     add_array(Quality,             :quality_total)
   end
@@ -163,8 +163,8 @@ module DFStock
     add_array(ArmorHand,           :hands)
     add_array(ArmorLeg,            :legs)
     add_array(ArmorShield,         :shield)
-    add_array(Metal,               :metals,          :mats)
-    add_array(WeaponOtherMaterial, :other_materials, :other_mats)
+    add_array(Metal,               :mats,       :metals)
+    add_array(WeaponOtherMaterial, :other_mats, :other_materials)
     add_array(Quality,             :quality_core)
     add_array(Quality,             :quality_total)
   end

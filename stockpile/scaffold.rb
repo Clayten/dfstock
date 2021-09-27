@@ -17,22 +17,22 @@ module DFStock
     end
 
     # This is called during class-definition at load-time
-    def add_array stockklass, desired_name, actual_name = nil
-      desired_name, actual_name = desired_name.to_sym, actual_name
-      array = [:array, desired_name, actual_name, stockklass]
+    def add_array stockklass, actual_name, desired_name = nil
+      actual_name, desired_name = actual_name.to_sym, desired_name
+      array = [:array, actual_name, desired_name, stockklass]
       # p [:add_array, self, :array, array]
-      @features.delete_if {|type, dn, an, sk| type == :array && desired_name == dn && actual_name == an && stockklass = sk }
+      @features.delete_if {|type, an, dn, sk| type == :array && actual_name == an && desired_name == dn && stockklass = sk }
       @features.push(array)
-      desired_name
+      actual_name
     end
 
     # This is called during class-definition at load-time
-    def add_flag desired_name, actual_name = nil
-      flag = [:flag, desired_name, actual_name]
+    def add_flag actual_name, desired_name = nil
+      flag = [:flag, actual_name, desired_name]
       # p [:add_flag, self, :flag, flag]
-      @features.delete_if {|type, dn, an, _| type == :flag && desired_name == dn && actual_name == an }
+      @features.delete_if {|type, an, dn, _| type == :flag && actual_name == an && desired_name == dn }
       @features.push(flag)
-      desired_name
+      actual_name
     end
 
     # This runs when the DFStock *module* is *included* into a DFHack::StockpileSettings *class* - it creates the accessors
@@ -47,21 +47,21 @@ module DFStock
       # base array of flags.
       flags = []
       arrays = []
-      @features.each {|type, desired_name, actual_name, stockklass|
-        actual_name ||= desired_name
+      @features.each {|type, actual_name, desired_name, stockklass|
+        desired_name ||= actual_name
         if :flag == type
           base_name = "flag_#{actual_name}".to_sym
-          flags << [desired_name, actual_name, base_name]
-          # p [:define_flag, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
-          if !method_defined? base_name
+          flags << [actual_name, desired_name, base_name]
+          # p [:define_flag, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
+          if !klass.method_defined? base_name
             klass.class_eval "alias #{base_name} #{actual_name}"
             klass.class_eval "alias #{desired_name} #{base_name}"
           end
 
         elsif :array == type
           base_name = "array_#{actual_name}".to_sym
-          arrays << [desired_name, actual_name, base_name]
-          # p [:define_array, :self, self, :klass, klass, :dn, desired_name, :bn, base_name, :an, actual_name]
+          arrays << [actual_name, desired_name, base_name]
+          # p [:define_array, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
             raise "Ack!" unless klass.instance_methods.include?(actual_name)
             klass.class_eval "alias #{base_name} #{actual_name}"
@@ -72,39 +72,42 @@ module DFStock
             array = list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
             }
-            def array.[]= i, v ; self[i].set !!v end
+            def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
             array
           }
 
         else ; raise "Unknown type #{type}" end
       }
 
-      klass.send(:define_method, :arrays) {
-        desired_names = arrays.map {|desired_name, _, _| desired_name }
-        pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
-        Hash[*pairs]
-      }
       klass.send(:define_method, :flags) {
-        desired_names = flags.map {|desired_name, _, _| desired_name }
+        desired_names = flags.map  {|_, desired_name, _| desired_name }
         pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
         Hash[*pairs]
       }
+      klass.send(:define_method, :arrays) {
+        desired_names = arrays.map {|_, desired_name, _| desired_name }
+        pairs = desired_names.map {|desired_name| [desired_name, send(desired_name)] }.inject(&:+)
+        Hash[*pairs]
+      }
+
       features = @features.dup
       # p [:features, features]
       klass.send(:define_method, :features) { features }
 
       wrappers = arrays + flags
       wrapper_count = Hash.new {|h,k| h[k] = 0 }
-      wrappers.each {|dn,an,bn| wrapper_count[an] += 1 }
-      simple_wrappers, shared_wrappers = wrappers.partition {|dn, an, bn| wrapper_count[an] == 1 }
+      wrappers.each {|an,dn,bn| wrapper_count[an] += 1 }
+      simple_wrappers, shared_wrappers = wrappers.partition {|an, dn, bn| wrapper_count[an] == 1 }
 
-      simple_wrappers.each {|desired_name, actual_name, _|
+      simple_wrappers.each {|actual_name, desired_name, _|
+        # p [:simple_wrapper, :an, actual_name, :dn, desired_name]
         next if actual_name == desired_name
         klass.class_eval { undef_method actual_name }
         klass.class_eval "alias #{actual_name} #{desired_name}"
       }
-      shared_wrappers.each {|desired_name, actual_name, base_name|
-        wrapped_methods = wrappers.select {|d,a,b| a == actual_name }.map {|d,a,b| d }
+      shared_wrappers.map {|actual_name, _, _| actual_name}.uniq.each {|actual_name|
+        wrapped_methods = wrappers.select {|a,d,_| a == actual_name }.map {|a,d,_| d }
+        # p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
         klass.class_eval { undef_method actual_name }
         klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end"
       }
