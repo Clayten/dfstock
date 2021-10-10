@@ -104,7 +104,7 @@ module DFStock
 
     def is_magma_safe?
       # p [:ims?, self, :material, material]
-      return false unless material && material.heat
+      return nil unless material && material.heat
 
       magma_temp = 12000
       mft = material.heat.mat_fixed_temp
@@ -150,6 +150,7 @@ module DFStock
 
     def index ; self.class.builtin_indexes[builtin_index] end
     def material ; self.class.builtin_materials[index] end
+    def materials ; [material] end
 
     def is_glass? ; material.flags[:IS_GLASS] end
 
@@ -907,7 +908,7 @@ module DFStock
 
   # NOTE: Index is seed_index, not a sparse index into plants
   class Seed < Plant
-    def self.seed_indexes         ; cache(:seeds)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.seed? ; a } } end
+    def self.seed_indexes ; cache(:seeds) { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.seed? ; a } } end
     def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
     def self.index_translation ; seed_indexes end
 
@@ -1045,7 +1046,7 @@ module DFStock
 
   # There are two trees in the stockpile list, Abaca and Banana, that don't produce wood. Watch for nulls if sorting, etc.
   class Tree < Plant
-    def self.tree_indexes         ; cache(:trees)         { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
+    def self.tree_indexes ; cache(:trees) { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.tree? ; a } } end
     # def self.trees ; plants.select {|t| t.tree? } end
     def self.trees ; tree_indexes.length.times.map {|i| new i } end
     def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
@@ -1109,7 +1110,7 @@ module DFStock
     def self.ammoothermaterial_items ; ['Wood', 'Bone'] end
     def self.ammoothermaterial_indexes ; (0 ... ammoothermaterial_items.length).to_a end
     def self.ammoothermaterials ; ammoothermaterial_indexes.map {|i| AmmoOtherMaterial.new i } end
-    def self.index_translation           ; ammoothermaterial_indexes end
+    def self.index_translation ; ammoothermaterial_indexes end
 
     def token ; self.class.ammoothermaterial_items[ammoothermaterial_index] end
     def to_s ; super + " ammoothermaterial_index=#{ammoothermaterial_index}" end
@@ -1258,6 +1259,9 @@ module DFStock
     def self.index_translation ; item_indexes end
 
     def raw ; self.class.item_raws[item_index] end
+
+    def material ; end
+    def materials ; [] end
 
     def adjective ; raw.adjective if raw.respond_to?(:adjective) && !raw.adjective.empty? end
     def name ; raw.name end
