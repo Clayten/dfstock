@@ -216,6 +216,8 @@ module DFStock
     def  enable   ; set true  end
     def disable   ; set false end
     def enabled?  ; !!get end
+
+    def all_other_categories ; parent_stockpile.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
   end
 
 end
