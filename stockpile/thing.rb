@@ -119,6 +119,13 @@ module DFStock
       }
     end
 
+    def self.classname
+      name.to_s.split(/:/).last.downcase
+    end
+    def self.index_translation
+      send(classname + '_indexes')
+    end
+
     attr_reader :index
     def initialize index, link: nil
       raise "You can't instantiate the base class" if self.class == Thing
@@ -132,7 +139,7 @@ module DFStock
   # # Template
   # class X < Thing
   #   def self.X_indexes ; (0 ... ??.length).to_a end
-  #   def self.index_translation ; X_indexes end
+  #   def self.index_translation ; X_indexes end # Scaffolded automatically, if your classname matches X from X_indexes
   #   def Y_index ; self.class.X_indexes[X_index] end
   #   def to_s ; super + " X_index=#{X_index}" end
   #   attr_reader :X_index
@@ -146,7 +153,7 @@ module DFStock
     def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a end
     def self.builtin_indexes ; builtin_materials.each_with_index.reject {|x,i| !x }.map {|v,i| i } end
     def self.builtins ; builtin_indexes.each_index.map {|i| Builtin.new i } end
-    def self.index_translation ; builtin_indexes end
+    # def self.index_translation ; builtin_indexes end
 
     def index ; self.class.builtin_indexes[builtin_index] end
     def material ; self.class.builtin_materials[index] end
@@ -167,7 +174,7 @@ module DFStock
   class Glass < Builtin
     def self.glass_indexes ; cache(:glasses) { builtins.each_with_index.inject([]) {|a,(m,i)| a << i if m.is_glass? ; a } } end
     def self.glasses ; glass_indexes.each_index.map {|i| Glass.new i } end
-    def self.index_translation ; glass_indexes end
+    # def self.index_translation ; glass_indexes end
 
     def builtin_index ; self.class.glass_indexes[glass_index] end
     def to_s ; super + " glass_index=#{glass_index}" end
@@ -184,7 +191,7 @@ module DFStock
     def self.inorganic_raws ; df.world.raws.inorganics end
     def self.inorganic_indexes ; (0 ... inorganic_raws.length).to_a end
     def self.inorganics ; inorganic_indexes.each_index.map {|i| Inorganic.new i } end
-    def self.index_translation ; inorganic_indexes end
+    # def self.index_translation ; inorganic_indexes end
 
     def raw ; self.class.inorganic_raws[index] end
     def materials ; [raw.material] end
@@ -227,7 +234,7 @@ module DFStock
   class Metal < Inorganic
     def self.metal_indexes ; cache(:metals) { inorganics.each_with_index.inject([]) {|a,(m,i)| a << i if m.is_metal? ; a } } end
     def self.metals ; metal_indexes.each_index.map {|i| Metal.new i } end
-    def self.index_translation ; metal_indexes end
+    # def self.index_translation ; metal_indexes end
 
     def inorganic_index ; self.class.metal_indexes[metal_index] end
     def to_s ; super + " metal_index=#{metal_index}" end
@@ -242,7 +249,7 @@ module DFStock
   class Gem < Inorganic # Fixme - Why stone_index not inorganic_index?
     def self.gem_indexes ; cache(:gems) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_gem? ; a } } end
     def self.gems ; gem_indexes.each_index.map {|i| Gem.new i } end
-    def self.index_translation ; gem_indexes end
+    # def self.index_translation ; gem_indexes end
 
     def stone_index ; self.class.gem_indexes[gem_index] end
     def to_s ; super + " gem_index=#{gem_index}" end
@@ -258,7 +265,7 @@ module DFStock
     # FIXME - Should be inorganic_index, not stone_index
     def self.cutstone_indexes ; cache(:cutstones) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_stone? ; a } } end
     def self.cutstones ; cutstone_indexes.each_index.map {|i| CutStone.new i } end
-    def self.index_translation ; cutstone_indexes end
+    # def self.index_translation ; cutstone_indexes end
 
     def stone_index ; self.class.cutstone_indexes[cutstone_index] end
     def to_s ; super + " cutstone_index=#{cutstone_index}" end
@@ -271,14 +278,14 @@ module DFStock
   end
 
   class Stone < Inorganic # NOTE: Not IS_STONE, but members of the stone stockpile
-    def self.stone_indexes ; (ore_indexes + economic_indexes + other_indexes + clay_indexes).sort end
+    def self.stone_indexes ; (ore_indexes + economicstone_indexes + otherstone_indexes + clay_indexes).sort end
     def self.stones ; stone_indexes.each_index.map {|i| Stone.new i } end
-    def self.index_translation ; stone_indexes end
+    # def self.index_translation ; stone_indexes end
 
-    def self.ore_indexes      ; cache(:ores)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
-    def self.economic_indexes ; cache(:economics) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
-    def self.other_indexes    ; cache(:others)    { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
-    def self.clay_indexes     ; cache(:clays)     { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
+    def self.ore_indexes           ; cache(:ores)      { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_ore? ; a } } end
+    def self.economicstone_indexes ; cache(:economics) { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_economic_stone? ; a } } end
+    def self.otherstone_indexes    ; cache(:others)    { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_other_stone? ; a } } end
+    def self.clay_indexes          ; cache(:clays)     { inorganics.each_with_index.inject([]) {|a,(s,i)| a << i if s.is_clay? ; a } } end
 
     def inorganic_index ; self.class.stone_indexes[stone_index] end
     def to_s ; super + " stone_index=#{stone_index}" end
@@ -292,7 +299,7 @@ module DFStock
 
   class Ore < Stone # FIXME: Make dependant on Stone indexes, not directly on Inorganic
     def self.ores ; ore_indexes.each_index.map {|i| Ore.new i } end
-    def self.index_translation ; ore_indexes end
+    # def self.index_translation ; ore_indexes end
 
     def stone_index ; self.class.stone_indexes.index self.class.ore_indexes[ore_index] end
     def to_s ; super + " ore_index=#{ore_index}" end
@@ -305,10 +312,10 @@ module DFStock
   end
 
   class EconomicStone < Stone
-    def self.economicstones ; economic_indexes.each_index.map {|i| new i } end
-    def self.index_translation ; economic_indexes end
+    def self.economicstones ; economicstone_indexes.each_index.map {|i| new i } end
+    # def self.index_translation ; economicstone_indexes end
 
-    def stone_index ; self.class.stone_indexes.index self.class.economic_indexes[economic_index] end
+    def stone_index ; self.class.stone_indexes.index self.class.economicstone_indexes[economic_index] end
     def to_s ; super + " economic_index=#{economic_index}" end
 
     attr_reader :economic_index
@@ -319,10 +326,10 @@ module DFStock
   end
 
   class OtherStone < Stone
-    def self.otherstones ; other_indexes.each_index.map {|i| OtherStone.new i } end
-    def self.index_translation ; other_indexes end
+    def self.otherstones ; otherstone_indexes.each_index.map {|i| OtherStone.new i } end
+    # def self.index_translation ; otherstone_indexes end
 
-    def stone_index ; self.class.stone_indexes.index self.class.other_indexes[other_index] end
+    def stone_index ; self.class.stone_indexes.index self.class.otherstone_indexes[other_index] end
     def to_s ; super + " other_index=#{other_index}" end
 
     attr_reader :other_index
@@ -334,7 +341,7 @@ module DFStock
 
   class Clay < Stone
     def self.clays ; clay_indexes.each_index.map {|i| Clay.new i } end
-    def self.index_translation ; clay_indexes end
+    # def self.index_translation ; clay_indexes end
 
     def stone_index ; self.class.stone_indexes.index self.class.clay_indexes[clay_index] end
     def to_s ; super + " clay_index=#{clay_index}" end
@@ -354,7 +361,7 @@ module DFStock
     def self.creature_raws ; cache(:creatures) { df.world.raws.creatures.all } end
     def self.creature_indexes ; (0 ... creature_raws.length).to_a end
     def self.creatures ; creature_indexes.each_index.map {|i| Creature.new i } end
-    def self.index_translation ; creature_indexes end
+    # def self.index_translation ; creature_indexes end
 
     def self.find_creature_by_organic cat_name, index ; creature_index, caste_num = organic(cat_name, index) ; creature_raws[creature_index].caste[caste_num] ; end
 
@@ -403,7 +410,7 @@ module DFStock
   class Animal < Creature
     def self.animal_indexes ; cache(:animals) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if c.is_stockpile_animal? ; a } } end
     def self.animals ; animal_indexes.each_index.map {|i| Animal.new i } end
-    def self.index_translation ; animal_indexes end
+    # def self.index_translation ; animal_indexes end
 
     def creature_index ; self.class.animal_indexes[animal_index] end
 
@@ -424,7 +431,7 @@ module DFStock
     def self.meat_indexes ; (0 ... meat_types.length).to_a end
     def self.meat_materials ; cache(:meat) { meat_types.map {|c,i| material_info c, i } } end
     def self.meats ; meat_indexes.each_index.map {|i| Meat.new i } end
-    def self.index_translation ; meat_indexes ; end
+    # def self.index_translation ; meat_indexes ; end
 
     def mat_index ; self.class.meat_types[meat_index].first end
     def mat_type  ; self.class.meat_types[meat_index].last end
@@ -447,7 +454,7 @@ module DFStock
     def self.fish_indexes ; (0 ... fish_types.length).to_a end
     def self.fish_raws ; cache(:fish) { fish_types.map {|i,c| creature_raws[i] } } end
     def self.fish ; fish_indexes.each_index.map {|i| Fish.new i } end
-    def self.index_translation ; fish_indexes ; end
+    # def self.index_translation ; fish_indexes ; end
 
     def types ; self.class.fish_types end
     def mat_index ; types[fish_index].first end
@@ -471,7 +478,7 @@ module DFStock
     def self.unpreparedfish_indexes ; (0 ... unpreparedfish_types.length).to_a end
     def self.unpreparedfish_raws ; cache(:unpreparedfish) { unpreparedfish_types.map {|i,c| creature_raws[i] } } end
     def self.unpreparedfish ; unpreparedfish_indexes.each_index.map {|i| UnpreparedFish.new i } end
-    def self.index_translation ; unpreparedfish_indexes ; end
+    # def self.index_translation ; unpreparedfish_indexes ; end
 
     def types ; self.class.unpreparedfish_types end
     def mat_index ; types[unpreparedfish_index].first end
@@ -495,7 +502,7 @@ module DFStock
     def self.egg_types ; organic_types[egg_category] end
     def self.egg_indexes ; (0 ... egg_types.length).to_a end
     def self.eggs ; egg_indexes.each_index.map {|i| Egg.new i } end
-    def self.index_translation ; egg_indexes end
+    # def self.index_translation ; egg_indexes end
 
     def creature_index ; self.class.egg_types[egg_index].first end
     def materials ; raw.material.select {|m| m.id =~ /EGG/ } end
@@ -519,7 +526,7 @@ module DFStock
     def self.creaturedrink_material_infos ; creaturedrink_types.map {|(c,i)| material_info c, i } end
     def self.creaturedrink_indexes ; (0 ... creaturedrink_types.length).to_a end
     def self.creaturedrinks ; creaturedrink_indexes.each_index.map {|i| CreatureDrink.new i } end
-    def self.index_translation ; creaturedrink_indexes end
+    # def self.index_translation ; creaturedrink_indexes end
 
     def material_info ; self.class.creaturedrink_material_infos[creaturedrink_index] end
     def material ; material_info.material end
@@ -541,7 +548,7 @@ module DFStock
     def self.creaturecheese_material_infos ; creaturecheese_types.map {|(c,i)| material_info c, i } end
     def self.creaturecheese_indexes ; (0 ... creaturecheese_types.length).to_a end
     def self.creaturecheeses ; creaturecheese_indexes.each_index.map {|i| CreatureCheese.new i } end
-    def self.index_translation ; creaturecheese_indexes end
+    # def self.index_translation ; creaturecheese_indexes end
 
     def material_info ; self.class.creaturecheese_material_infos[creaturecheese_index] end
     def material ; material_info.material end
@@ -563,7 +570,7 @@ module DFStock
     def self.creaturepowder_material_infos ; creaturepowder_types.map {|(c,i)| material_info c, i } end
     def self.creaturepowder_indexes ; (0 ... creaturepowder_types.length).to_a end
     def self.creaturepowders ; creaturepowder_indexes.each_index.map {|i| CreaturePowder.new i } end
-    def self.index_translation ; creaturepowder_indexes end
+    # def self.index_translation ; creaturepowder_indexes end
 
     def material_info ; self.class.creaturepowder_material_infos[creaturepowder_index] end
     def material ; material_info.material end
@@ -585,7 +592,7 @@ module DFStock
     def self.silk_material_infos ; silk_types.map {|(c,i)| material_info c, i } end
     def self.silk_indexes ; (0 ... silk_types.length).to_a end
     def self.silks ; silk_indexes.each_index.map {|i| Silk.new i } end
-    def self.index_translation ; silk_indexes end
+    # def self.index_translation ; silk_indexes end
 
     def creature_index ; self.class.find_creature_index(raw) if raw end
     def material_info ; self.class.silk_material_infos[silk_index] end
@@ -609,7 +616,7 @@ module DFStock
     def self.yarn_material_infos ; yarn_types.map {|(c,i)| material_info c, i } end
     def self.yarn_indexes ; (0 ... yarn_types.length).to_a end
     def self.yarns ; yarn_indexes.each_index.map {|i| Yarn.new i } end
-    def self.index_translation ; yarn_indexes end
+    # def self.index_translation ; yarn_indexes end
 
     def creature_index ; self.class.find_creature_index(raw) if raw end
     def material_info ; self.class.yarn_material_infos[yarn_index] end
@@ -632,7 +639,7 @@ module DFStock
     def self.metalthread_material_infos ; metalthread_types.map {|(c,i)| material_info c, i } end
     def self.metalthread_indexes ; (0 ... metalthread_types.length).to_a end
     def self.metalthreads ; metalthread_indexes.each_index.map {|i| MetalThread.new i } end
-    def self.index_translation ; metalthread_indexes end
+    # def self.index_translation ; metalthread_indexes end
 
     def creature_index ; self.class.find_creature_index(raw) if raw end
     def material_info ; self.class.metalthread_material_infos[metalthread_index] end
@@ -655,7 +662,7 @@ module DFStock
     def self.fat_material_infos ; cache(:fats) { fat_types.map {|(t,i)| material_info t, i } } end
     def self.fat_indexes ; (0 ... fat_types.length).to_a end
     def self.fats ; fat_indexes.each_index.map {|i| Fat.new i } end
-    def self.index_translation ; fat_indexes end
+    # def self.index_translation ; fat_indexes end
 
     def material_info ; self.class.fat_material_infos[fat_index] end
     def material ; material_info.material end
@@ -677,7 +684,7 @@ module DFStock
     def self.creatureextract_material_infos ; cache(:creatureextracts) { creatureextract_types.map {|(c,i)| material_info c, i } } end
     def self.creatureextract_indexes ; (0 ... creatureextract_types.length).to_a end
     def self.creatureextracts ; creatureextract_indexes.each_index.map {|i| CreatureExtract.new i } end
-    def self.index_translation ; creatureextract_indexes end
+    # def self.index_translation ; creatureextract_indexes end
 
     def material_info ; self.class.creatureextract_material_infos[creatureextract_index] end
     def material ; material_info.material end
@@ -699,7 +706,7 @@ module DFStock
     def self.leather_material_infos ; cache(:leathers) { leather_types.map {|(c,i)| material_info c, i } } end
     def self.leather_indexes ; (0 ... leather_types.length).to_a end
     def self.leathers ; leather_indexes.each_index.map {|i| Leather.new i } end
-    def self.index_translation ; leather_indexes end
+    # def self.index_translation ; leather_indexes end
 
     def material_info ; self.class.leather_material_infos[leather_index] end
     def material ; material_info.material end
@@ -720,7 +727,7 @@ module DFStock
     def self.parchment_material_infos ; cache(:parchments) { parchment_types.map {|(c,i)| material_info c, i } } end
     def self.parchment_indexes ; (0 ... parchment_types.length).to_a end
     def self.parchments ; parchment_indexes.each_index.map {|i| Parchment.new i } end
-    def self.index_translation ; parchment_indexes end
+    # def self.index_translation ; parchment_indexes end
 
     def material_info ; self.class.parchment_material_infos[parchment_index] end
     def material ; material_info.material end
@@ -743,7 +750,7 @@ module DFStock
     def self.plant_material_infos ; plant_types.map {|(c,i)| material_info c, i } end
     def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
     def self.plant_indexes ; (0 ... plant_types.length).to_a end
-    def self.index_translation ; plant_indexes end
+    # def self.index_translation ; plant_indexes end
 
     def self.find_plant_index raw ; plant_raws.index raw end
 
@@ -800,7 +807,7 @@ module DFStock
   class PlantProduct < Plant
     def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
     def self.plantproducts ; plantproduct_indexes.each_index.map {|i| PlantProduct.new i } end
-    def self.index_translation ; plantproduct_indexes end
+    # def self.index_translation ; plantproduct_indexes end
 
     def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
     def to_s ; super + " plantproduct_index=#{plantproduct_index}" end
@@ -818,7 +825,7 @@ module DFStock
     def self.plantdrink_material_infos ; plantdrink_types.map {|(c,i)| material_info c, i } end
     def self.plantdrink_indexes ; (0 ... plantdrink_types.length).to_a end
     def self.plantdrinks ; plantdrink_indexes.each_index.map {|i| PlantDrink.new i } end
-    def self.index_translation ; plantdrink_indexes end
+    # def self.index_translation ; plantdrink_indexes end
 
     def material_info ; self.class.plantdrink_material_infos[plantdrink_index] end
     def material ; material_info.material end
@@ -840,7 +847,7 @@ module DFStock
     def self.plantcheese_material_infos ; plantcheese_types.map {|(c,i)| material_info c, i } end
     def self.plantcheese_indexes ; (0 ... plantcheese_types.length).to_a end
     def self.plantcheeses ; plantcheese_indexes.each_index.map {|i| PlantCheese.new i } end
-    def self.index_translation ; plantcheese_indexes end
+    # def self.index_translation ; plantcheese_indexes end
 
     def material_info ; self.class.plantcheese_material_infos[plantcheese_index] end
     def material ; material_info.material end
@@ -865,7 +872,7 @@ module DFStock
 
     # def self.plantpowder_indexes ; cache(:plantpowders) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
     # def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
-    def self.index_translation ; plantpowder_indexes end
+    # def self.index_translation ; plantpowder_indexes end
 
     def plant_index ; self.class.plantpowder_indexes[plantpowder_index] end
     def to_s ; super + " plantpowder_index=#{plantpowder_index}" end
@@ -885,7 +892,7 @@ module DFStock
     def self.fruitleaf_material_infos ; fruitleaf_types.map {|(t,i)| material_info t, i } end
     def self.fruitleaf_indexes ; fruitleaf_material_infos.map {|mi| find_plant_index mi.plant } end
     def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
-    def self.index_translation ; fruitleaf_indexes end
+    # def self.index_translation ; fruitleaf_indexes end
 
     def self.fruitleaf_growths
 
@@ -910,7 +917,7 @@ module DFStock
   class Seed < Plant
     def self.seed_indexes ; cache(:seeds) { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.seed? ; a } } end
     def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
-    def self.index_translation ; seed_indexes end
+    # def self.index_translation ; seed_indexes end
 
     def material ; mat_seed end
     def plant_index ; self.class.seed_indexes[seed_index] end
@@ -930,7 +937,7 @@ module DFStock
     def self.paste_material_infos ; paste_types.map {|(c,i)| material_info c, i } end
     def self.paste_indexes ; paste_material_infos.map {|mi| find_plant_index mi.plant } end
     def self.pastes ; paste_indexes.each_index.map {|i| Paste.new i } end
-    def self.index_translation ; paste_indexes end
+    # def self.index_translation ; paste_indexes end
 
     def plant_index ; self.class.paste_indexes[paste_index] end
     def material_info ; self.class.paste_material_infos[paste_index] end
@@ -953,7 +960,7 @@ module DFStock
     def self.plantfiber_material_infos ; plantfiber_types.map {|(c,i)| material_info c, i } end
     def self.plantfiber_indexes ; plantfiber_material_infos.map {|mi| find_plant_index mi.plant } end
     def self.plantfibers ; plantfiber_indexes.each_index.map {|i| PlantFiber.new i } end
-    def self.index_translation ; plantfiber_indexes end
+    # def self.index_translation ; plantfiber_indexes end
 
     def plant_index ; self.class.plantfiber_indexes[plantfiber_index] end
     def material_info ; self.class.plantfiber_material_infos[plantfiber_index] end
@@ -983,7 +990,7 @@ module DFStock
     def self.paper_material_infos ; paper_types.map {|(c,i)| material_info c, i } end
     def self.paper_indexes ; paper_material_infos.map {|mi| find_plant_index mi.plant } end
     def self.papers ; paper_indexes.each_index.map {|i| Paper.new i } end
-    def self.index_translation ; paper_indexes end
+    # def self.index_translation ; paper_indexes end
 
     def plant_index ; self.class.paper_indexes[paper_index] end
     def material_info ; self.class.paper_material_infos[paper_index] end
@@ -1006,7 +1013,7 @@ module DFStock
     def self.pressed_material_infos ; pressed_types.map {|(c,i)| material_info c, i } end
     def self.pressed_indexes ; (0 ... pressed_types.length).to_a end
     def self.presseds ; pressed_indexes.each_index.map {|i| Pressed.new i } end
-    def self.index_translation ; pressed_indexes end
+    # def self.index_translation ; pressed_indexes end
 
     def material_info ; self.class.pressed_material_infos[pressed_index] end
     def material ; material_info.material end
@@ -1028,7 +1035,7 @@ module DFStock
     def self.plantextract_material_infos ; plantextract_types.map {|(c,i)| material_info c, i } end
     def self.plantextract_indexes ; (0 ... plantextract_types.length).to_a end
     def self.plantextracts ; plantextract_indexes.each_index.map {|i| PlantExtract.new i } end
-    def self.index_translation ; plantextract_indexes end
+    # def self.index_translation ; plantextract_indexes end
 
     def material_info ; self.class.plantextract_material_infos[plantextract_index] end
     def material ; material_info.material end
@@ -1050,7 +1057,7 @@ module DFStock
     # def self.trees ; plants.select {|t| t.tree? } end
     def self.trees ; tree_indexes.length.times.map {|i| new i } end
     def self.woods ; trees.select {|t| t.wood? } end # Just the wood-producing trees
-    def self.index_translation ; tree_indexes end
+    # def self.index_translation ; tree_indexes end
     def plant_index ; self.class.tree_indexes[tree_index] end
     def to_s ; super + " tree_index=#{tree_index}" end
 
@@ -1075,7 +1082,7 @@ module DFStock
     def self.furniture_types ; DFHack::FurnitureType::NUME.keys end
     def self.furniture_indexes ; (0 ... furniture_types.length).to_a end
     def self.furnitures ; furniture_indexes.map {|i| Furniture.new i } end
-    def self.index_translation ; furniture_indexes end
+    # def self.index_translation ; furniture_indexes end
 
     def furniture ; self.class.furniture_types[furniture_index] end
     def token ; title_case furniture.to_s.sub(/_/,' ') end
@@ -1092,7 +1099,7 @@ module DFStock
     def self.miscliquid_items ; [Builtin.new(11).material, Inorganic.new(33).material] end
     def self.miscliquid_indexes ; (0 ... self.miscliquid_items.length).to_a end
     def self.miscliquids ; miscliquid_indexes.map {|i| MiscLiquid.new i } end
-    def self.index_translation ; miscliquid_indexes end
+    # def self.index_translation ; miscliquid_indexes end
 
     def material ; self.class.miscliquid_items[miscliquid_index] end
     def natural_state ; {0 => :Liquid, 1 => :Solid}[miscliquid_index] end
@@ -1110,7 +1117,7 @@ module DFStock
     def self.ammoothermaterial_items ; ['Wood', 'Bone'] end
     def self.ammoothermaterial_indexes ; (0 ... ammoothermaterial_items.length).to_a end
     def self.ammoothermaterials ; ammoothermaterial_indexes.map {|i| AmmoOtherMaterial.new i } end
-    def self.index_translation ; ammoothermaterial_indexes end
+    # def self.index_translation ; ammoothermaterial_indexes end
 
     def token ; self.class.ammoothermaterial_items[ammoothermaterial_index] end
     def to_s ; super + " ammoothermaterial_index=#{ammoothermaterial_index}" end
@@ -1135,7 +1142,7 @@ module DFStock
     end
     def self.barothermaterial_indexes ; (0 ... barothermaterial_items.length).to_a end
     def self.barothermaterials ; barothermaterial_indexes.map {|i| BarOtherMaterial.new i } end
-    def self.index_translation           ; barothermaterial_indexes end
+    # def self.index_translation           ; barothermaterial_indexes end
 
     def material ; self.class.barothermaterial_items[barothermaterial_index] end
 
@@ -1153,7 +1160,7 @@ module DFStock
     def self.blockothermaterial_items ; ['Green Glass', 'Clear Glass', 'Crystal Glass', 'Wood'] end
     def self.blockothermaterial_indexes ; (0 ... blockothermaterial_items.length).to_a end
     def self.blockothermaterials ; blockothermaterial_indexes.map {|i| BlockOtherMaterial.new i } end
-    def self.index_translation ; blockothermaterial_indexes end
+    # def self.index_translation ; blockothermaterial_indexes end
 
     def token ; self.class.blockothermaterial_items[blockothermaterial_index] end
     def to_s ; super + " blockothermaterial_index=#{blockothermaterial_index}" end
@@ -1169,7 +1176,7 @@ module DFStock
     def self.weaponothermaterial_items ; ['Wood', 'Plant Cloth', 'Bone', 'Shell', 'Leather', 'Silk', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn'] end
     def self.weaponothermaterial_indexes ; (0 ... weaponothermaterial_items.length).to_a end
     def self.weaponothermaterials ; weaponothermaterial_indexes.map {|i| WeaponOtherMaterial.new i } end
-    def self.index_translation           ; weaponothermaterial_indexes end
+    # def self.index_translation           ; weaponothermaterial_indexes end
 
     def token ; self.class.weaponothermaterial_items[weaponothermaterial_index] end
     def to_s ; super + " weaponothermaterial_index=#{weaponothermaterial_index}" end
@@ -1186,7 +1193,7 @@ module DFStock
                                              'Amber', 'Coral', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn'] end
     def self.furnitureothermaterial_indexes ; (0 ... furnitureothermaterial_items.length).to_a end
     def self.furnitureothermaterials ; furnitureothermaterial_indexes.map {|i| FurnitureOtherMaterial.new i } end
-    def self.index_translation           ; furnitureothermaterial_indexes end
+    # def self.index_translation           ; furnitureothermaterial_indexes end
 
     def token ; self.class.furnitureothermaterial_items[furnitureothermaterial_index] end
     def to_s ; super + " furnitureothermaterial_index=#{furnitureothermaterial_index}" end
@@ -1203,7 +1210,7 @@ module DFStock
                                                  'Amber', 'Coral', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn', 'Wax'] end
     def self.finishedgoodsothermaterial_indexes ; (0 ... finishedgoodsothermaterial_items.length).to_a end
     def self.finishedgoodsothermaterials ; finishedgoodsothermaterial_indexes.map {|i| FinishedGoodsOtherMaterial.new i } end
-    def self.index_translation           ; finishedgoodsothermaterial_indexes end
+    # def self.index_translation           ; finishedgoodsothermaterial_indexes end
 
     def token ; self.class.finishedgoodsothermaterial_items[finishedgoodsothermaterial_index] end
     def to_s ; super + " finishedgoodsothermaterial_index=#{finishedgoodsothermaterial_index}" end
@@ -1222,7 +1229,7 @@ module DFStock
     def self.finishedgood_indexes ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end
     # def self.finishedgood_indexes ; (0 ... finishedgood_items.length).to_a end
     def self.finishedgoods ; (0 ... finishedgood_indexes.length).map {|i| FinishedGood.new i } end
-    def self.index_translation ; finishedgood_indexes end
+    # def self.index_translation ; finishedgood_indexes end
 
     def index ; self.class.finishedgood_indexes[finishedgood_index] end
     def token ; self.class.finishedgood_items[finishedgood_index] end
@@ -1240,7 +1247,7 @@ module DFStock
     def self.refuse_items ; ["Thing  0", "Thing  1", "Thing  2", "Thing  3", "Thing  4", "Thing  5", "Thing  6", "Thing  7", "Thing  8", "Thing  9", "Thing 10", "Thing 11", "Thing 12", "Thing 13", "Thing 14", "Thing 15", "Thing 16", "Thing 17", "Thing 18", "Thing 19", "Thing 20", "Thing 21", "Thing 22", "Thing 23", "Thing 24", "Thing 25", "Thing 26", "Thing 27", "Thing 28", "Thing 29", "Thing 30", "Thing 31", "Thing 32", "Thing 33", "Thing 34", "Thing 35", "Thing 36", "Thing 37", "Thing 38", "Thing 39", "Thing 40", "Thing 41", "Thing 42", "Thing 43", "Thing 44", "Thing 45", "Thing 46", "Thing 47", "Thing 48", "Thing 49", "Thing 50", "Thing 51", "Thing 52", "Thing 53", "Thing 54", "Thing 55", "Thing 56", "Thing 57", "Thing 58", "Thing 59", "Thing 60", "Thing 61", "Thing 62", "Thing 63", "Thing 64", "Thing 65", "Thing 66", "Thing 67", "Thing 68", "Thing 69", "Thing 70", "Thing 71", "Thing 72", "Thing 73", "Thing 74", "Thing 75", "Thing 76", "Thing 77", "Thing 78", "Thing 79", "Thing 80"] end
     def self.refuse_indexes ; [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77, 78, 79, 80, 81, 82, 83, 85, 86, 87, 88, 89] end
     def self.refuses ; (0 ... refuse_indexes.length).map {|i| Refuse.new i } end
-    def self.index_translation           ; refuse_indexes end
+    # def self.index_translation           ; refuse_indexes end
 
     def token ; self.class.refuse_items[refuse_index] end
     def to_s ; super + " refuse_index=#{refuse_index}" end
@@ -1256,7 +1263,7 @@ module DFStock
     def self.item_raws ; df.world.raws.itemdefs.all end
     def self.item_indexes ; (0 ... item_raws.length).to_a end
     def self.items ; item_indexes.map {|i| Item.new i } end
-    def self.index_translation ; item_indexes end
+    # def self.index_translation ; item_indexes end
 
     def raw ; self.class.item_raws[item_index] end
 
@@ -1284,7 +1291,7 @@ module DFStock
   class Ammo < Item
     def self.ammo_indexes ; item_raws.each_with_index.select {|i,_| i.class == DFHack::ItemdefAmmost }.map {|_,i| i } end
     def self.ammos ; ammo_indexes.each_index.map {|i| Ammo.new i } end
-    def self.index_translation ; ammo_indexes end
+    # def self.index_translation ; ammo_indexes end
 
     def item_index ; self.class.ammo_indexes[ammo_index] end
 
@@ -1303,7 +1310,7 @@ module DFStock
   class Weapon < Item
     def self.weapon_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefWeaponst }.map {|x,i| i } end
     def self.weapons ; weapon_indexes.each_index.map {|i| Weapon.new i } end
-    def self.index_translation ; weapon_indexes end
+    # def self.index_translation ; weapon_indexes end
 
     def item_index ; self.class.weapon_indexes[weapon_index] end
 
@@ -1320,7 +1327,7 @@ module DFStock
   class TrapWeapon < Item
     def self.trapweapon_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefTrapcompst }.map {|x,i| i } end
     def self.trapweapons ; trapweapon_indexes.each_index.map {|i| TrapWeapon.new i } end
-    def self.index_translation ; trapweapon_indexes end
+    # def self.index_translation ; trapweapon_indexes end
 
     def item_index ; self.class.trapweapon_indexes[trapweapon_index] end
 
@@ -1337,7 +1344,7 @@ module DFStock
   class ArmorBody < Item
     def self.armorbody_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefArmorst }.map {|x,i| i } end
     def self.armorbodys ; armorbody_indexes.each_index.map {|i| ArmorBody.new i } end
-    def self.index_translation ; armorbody_indexes end
+    # def self.index_translation ; armorbody_indexes end
 
     def item_index ; self.class.armorbody_indexes[armorbody_index] end
 
@@ -1354,7 +1361,7 @@ module DFStock
   class ArmorHead < Item
     def self.armorhead_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefHelmst }.map {|x,i| i } end
     def self.armorheads ; armorhead_indexes.each_index.map {|i| ArmorHead.new i } end
-    def self.index_translation ; armorhead_indexes end
+    # def self.index_translation ; armorhead_indexes end
 
     def item_index ; self.class.armorhead_indexes[armorhead_index] end
 
@@ -1371,7 +1378,7 @@ module DFStock
   class ArmorFeet < Item
     def self.armorfeet_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefShoesst }.map {|x,i| i } end
     def self.armorfeets ; armorfeet_indexes.each_index.map {|i| ArmorFeet.new i } end
-    def self.index_translation ; armorfeet_indexes end
+    # def self.index_translation ; armorfeet_indexes end
 
     def item_index ; self.class.armorfeet_indexes[armorfeet_index] end
 
@@ -1388,7 +1395,7 @@ module DFStock
   class ArmorHand < Item
     def self.armorhand_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefGlovesst }.map {|x,i| i } end
     def self.armorhands ; armorhand_indexes.each_index.map {|i| ArmorHand.new i } end
-    def self.index_translation ; armorhand_indexes end
+    # def self.index_translation ; armorhand_indexes end
 
     def item_index ; self.class.armorhand_indexes[armorhand_index] end
 
@@ -1405,7 +1412,7 @@ module DFStock
   class ArmorLeg < Item
     def self.armorleg_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefPantsst }.map {|x,i| i } end
     def self.armorlegs ; armorleg_indexes.each_index.map {|i| ArmorLeg.new i } end
-    def self.index_translation ; armorleg_indexes end
+    # def self.index_translation ; armorleg_indexes end
 
     def item_index ; self.class.armorleg_indexes[armorleg_index] end
 
@@ -1422,7 +1429,7 @@ module DFStock
   class ArmorShield < Item
     def self.armorshield_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefShieldst }.map {|x,i| i } end
     def self.armorshields ; armorshield_indexes.each_index.map {|i| ArmorShield.new i } end
-    def self.index_translation ; armorshield_indexes end
+    # def self.index_translation ; armorshield_indexes end
 
     def item_index ; self.class.armorshield_indexes[armorshield_index] end
 
@@ -1439,7 +1446,7 @@ module DFStock
   class Quality < Thing
     def self.quality_levels ; DFHack::ItemQuality::NUME.keys end
     def self.quality_indexes ; (0 ... quality_levels.length).to_a end
-    def self.index_translation ; quality_indexes end
+    # def self.index_translation ; quality_indexes end
     def self.qualities ; (0 ... index_translation.length).map {|i| new i } end
 
     def quality ; self.class.quality_levels[quality_index] end
