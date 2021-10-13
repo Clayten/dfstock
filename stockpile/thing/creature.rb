@@ -1,5 +1,22 @@
 module DFStock
 
+  module CreatureQueries
+    def is_creature? ; cache(:creature, creature_index) { raw.respond_to?(:creature_id) && !flags[:EQUIPMENT_WAGON] } end
+
+    def is_stockpile_animal?
+      cache(:stockpile_animal, creature_index) { is_creature? && raw.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ }
+    end
+
+    def edible_cooked?  ; cache(:edible_cooked, creature_index) { material_flags[:EDIBLE_COOKED] } end
+    def edible_raw?     ; cache(:edible_raw,    creature_index) { material_flags[:EDIBLE_RAW] } end
+    def edible?         ; cache(:edible,        creature_index) { edible_cooked? || edible_raw? } end
+
+    def lays_eggs?        ; cache(:eggs,    creature_index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
+    def grazer?           ; cache(:grazer,  creature_index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
+    def produces_honey?   ; cache(:honey,   creature_index) { materials.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
+    def provides_leather? ; cache(:leather, creature_index) { materials.any? {|mat| mat.id == 'LEATHER' } } end
+  end
+
   # food/fish[0] = Cuttlefish(F) = raws.creatures.all[446 = raws.mat_table.organic_indexes[1 = :Fish][0]]
   # NOTE: Not all creatures are stockpilable, and not everything in the array is a creature
   # TODO: Derive Animals from this, and use this then non-sparse class to parent eggs.
@@ -29,21 +46,6 @@ module DFStock
     # def token ; "#{caste.caste_name.first}" end # 'toad *woman*' leather. Which caste is the default?
     def token ; raw.name.first end
     def to_s ; "#{super} creature_index=#{creature_index}" end
-
-    def is_creature? ; cache(:creature, creature_index) { raw.respond_to?(:creature_id) && !flags[:EQUIPMENT_WAGON] } end
-
-    def is_stockpile_animal?
-      cache(:stockpile_animal, creature_index) { is_creature? && raw.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ }
-    end
-
-    def edible_cooked?  ; cache(:edible_cooked, creature_index) { material_flags[:EDIBLE_COOKED] } end
-    def edible_raw?     ; cache(:edible_raw,    creature_index) { material_flags[:EDIBLE_RAW] } end
-    def edible?         ; cache(:edible,        creature_index) { edible_cooked? || edible_raw? } end
-
-    def lays_eggs?        ; cache(:eggs,    creature_index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end # Finds male and female of egg-laying species
-    def grazer?           ; cache(:grazer,  creature_index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
-    def produces_honey?   ; cache(:honey,   creature_index) { materials.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
-    def provides_leather? ; cache(:leather, creature_index) { materials.any? {|mat| mat.id == 'LEATHER' } } end
 
     attr_reader :creature_index
     def initialize index, link: nil, caste: nil

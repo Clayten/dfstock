@@ -1,16 +1,6 @@
 module DFStock
 
-  class Plant < Thing
-    def self.plant_category ; organic_category :Plants end
-    def self.plant_raws ; df.world.raws.plants.all end
-    def self.plant_types ; organic_types[plant_category] end
-    def self.plant_material_infos ; plant_types.map {|(c,i)| material_info c, i } end
-    def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
-    def self.plant_indexes ; (0 ... plant_types.length).to_a end
-    # def self.index_translation ; plant_indexes end
-
-    def self.find_plant_index raw ; plant_raws.index raw end
-
+  module PlantQueries
     def mat_mill       ; materials.find {|m| m.id == 'MILL' } end
     def mat_drink      ; materials.find {|m| m.id == 'DRINK' } end
     def mat_wood       ; materials.find {|m| m.id == 'WOOD' } end
@@ -49,6 +39,18 @@ module DFStock
     def summer? ; raw.flags[:SUMMER] end
     def autumn? ; raw.flags[:AUTUMN] end
     def crop? ; winter? || spring? || summer? || autumn? end
+  end
+
+  class Plant < Thing
+    def self.plant_category ; organic_category :Plants end
+    def self.plant_raws ; df.world.raws.plants.all end
+    def self.plant_types ; organic_types[plant_category] end
+    def self.plant_material_infos ; plant_types.map {|(c,i)| material_info c, i } end
+    def self.plants ; plant_indexes.each_index.map {|i| Plant.new i } end
+    def self.plant_indexes ; (0 ... plant_types.length).to_a end
+    # def self.index_translation ; plant_indexes end
+
+    def self.find_plant_index raw ; plant_raws.index raw end
 
     def raw ; self.class.plant_raws[plant_index] end
     def token ; raw.name end

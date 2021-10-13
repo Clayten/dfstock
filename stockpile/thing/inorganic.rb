@@ -1,5 +1,24 @@
 module DFStock
 
+  module InorganicQueries
+    def is_magma_safe?
+      # p [:ims?, self, :material, material]
+      return nil unless material && material.heat
+
+      magma_temp = 12000
+      mft = material.heat.mat_fixed_temp
+      return true  if mft && mft != 60001
+
+      cdp = material.heat.colddam_point
+      return false if cdp && cdp != 60001 && cdp < magma_temp
+
+      %w(heatdam ignite melting boiling).all? {|n|
+        t = material.heat.send("#{n}_point")
+        t == 60001 || t > magma_temp
+      }
+    end
+  end
+
   # raw -> material
   class Inorganic < Thing
     def self.inorganic_raws ; df.world.raws.inorganics end

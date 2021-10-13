@@ -1,5 +1,6 @@
 module DFStock
 
+  # Things that aren't just a material - like chairs
   class Item < Thing
     def self.item_raws ; df.world.raws.itemdefs.all end
     def self.item_indexes ; (0 ... item_raws.length).to_a end

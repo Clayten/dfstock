@@ -20,6 +20,12 @@ module DFStock
   class Thing
     include Raw
     include Material
+
+    include   BuiltinQueries
+    include InorganicQueries
+    include  CreatureQueries
+    include     PlantQueries
+
     def self.material_info cat, id ; df::MaterialInfo.new cat, id end
     def self.material cat, id ; material_info(cat, id).material end # FIXME How to create the material directly?
 
@@ -33,21 +39,24 @@ module DFStock
       organic_types[cat_num][index]
     end
 
-    # For a class, list all of its instances
+    # For a class, call the method that lists all of its instances
     def self.instances
+      # Downcase and pluralize the classname
       nm = self.name.split(':').last.downcase
-      [
+      plural_forms = [
         nm,                   # fish    -> fish
         (nm + 's'),           # tree    -> trees
         (nm + 'es'),          # glass   -> glasses
         (nm.sub(/f$/,'ves')), # leaf    -> leaves
         (nm.sub(/y$/,'ies'))  # quality -> qualities
-      ].each {|mn|
+      ]
+      plural_forms.each {|mn|
         return send(mn) if respond_to?(mn)
       }
       false
     end
 
+    # List all classes descended from this one
     def self.subclasses
       ObjectSpace.each_object.select {|o| o.is_a?(Class) && o < self }.sort_by(&:to_s)
     end
@@ -55,10 +64,13 @@ module DFStock
     private
     def food_indexes *ms ; ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a } end
 
+    # Capitalize Every Word Of A String
     def title_case string ; string.split(/\s+/).map(&:downcase).map(&:capitalize).join(' ') end
 
     public
+
     def food_mat_indexes ; food_indexes *materials end
+
     def check_index
       raise "No linked array" unless link
       raise "Linked array is empty - did you enable the category?" if link.empty?
@@ -101,23 +113,6 @@ module DFStock
 
     def link ; @link end
     def linked? ; link && !link.empty? end
-
-    def is_magma_safe?
-      # p [:ims?, self, :material, material]
-      return nil unless material && material.heat
-
-      magma_temp = 12000
-      mft = material.heat.mat_fixed_temp
-      return true  if mft && mft != 60001
-
-      cdp = material.heat.colddam_point
-      return false if cdp && cdp != 60001 && cdp < magma_temp
-
-      %w(heatdam ignite melting boiling).all? {|n|
-        t = material.heat.send("#{n}_point")
-        t == 60001 || t > magma_temp
-      }
-    end
 
     def self.classname
       name.to_s.split(/:/).last.downcase

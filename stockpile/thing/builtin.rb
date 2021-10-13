@@ -1,5 +1,9 @@
 module DFStock
 
+  module BuiltinQueries
+    def is_glass? ; material.flags[:IS_GLASS] end
+  end
+
   class Builtin < Thing
     def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a end
     def self.builtin_indexes ; builtin_materials.each_with_index.reject {|x,i| !x }.map {|v,i| i } end
@@ -9,8 +13,6 @@ module DFStock
     def index ; self.class.builtin_indexes[builtin_index] end
     def material ; self.class.builtin_materials[index] end
     def materials ; [material] end
-
-    def is_glass? ; material.flags[:IS_GLASS] end
 
     def to_s ; super + " builtin_index=#{builtin_index}" end
     def token ; material.state_name[:Solid] end
