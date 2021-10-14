@@ -5,21 +5,30 @@ module DFStock
   # A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
-  module Raw
+  module RawMaterials
     def materials ; return [] unless respond_to? :raw ; raw.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
     def material  ; materials.first end
     def raws ; return false unless raw ; raw.raws.sort end
-  end
+    def raw ; raise "#{self.class} does not have a raw definition" end
+    def has_raw?      ; !!(raw      rescue nil) end
+    def has_material? ; !!(material rescue nil) end
 
-  module Material
     def material_ids ; materials.map &:id end
     def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
-    def material_flags ms = materials ; ms = [*ms] ; cache(:material_flags, *ms.map(&:id)) { active_flags [*ms].map(&:flags) } end
+    def material_flags ms = nil
+      return {} unless has_material?
+      ms = [*(ms || materials)]
+      active_flags([*ms].map(&:flags))
+      # cache(:material_flags, *ms.map(&:id)) {
+      # }
+    end
+    def raw_flags
+      has_raw? ?  active_flags([raw.flags]) : {}
+    end
   end
 
   class Thing
-    include Raw
-    include Material
+    include RawMaterials
 
     include   BuiltinQueries
     include InorganicQueries
