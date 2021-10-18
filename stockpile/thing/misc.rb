@@ -1,3 +1,5 @@
+require 'thing/thing'
+
 module DFStock
 
   # TODO: Find item raws for these

@@ -1,5 +1,4 @@
-# Force the loading of 'thing.rb' before this file.
-DwarfFortressUtils.loadlib(File.join(File.dirname(__FILE__), 'thing.rb'))
+require 'thing'
 
 module DFStock
 

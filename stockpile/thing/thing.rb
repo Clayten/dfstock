@@ -30,11 +30,6 @@ module DFStock
   class Thing
     include RawMaterials
 
-    include   BuiltinQueries
-    include InorganicQueries
-    include  CreatureQueries
-    include     PlantQueries
-
     def self.material_info cat, id ; df::MaterialInfo.new cat, id end
     def self.material cat, id ; material_info(cat, id).material end # FIXME How to create the material directly?
 

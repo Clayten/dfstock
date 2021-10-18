@@ -1,3 +1,5 @@
+require 'thing/thing'
+
 module DFStock
 
   module InorganicQueries

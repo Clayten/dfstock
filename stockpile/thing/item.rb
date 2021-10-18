@@ -1,3 +1,5 @@
+require 'thing/thing'
+
 module DFStock
 
   # Things that aren't just a material - like chairs
