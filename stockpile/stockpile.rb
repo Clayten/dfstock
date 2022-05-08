@@ -322,7 +322,7 @@ if self.class.const_defined? :DFHack
 
     # Intended to quickly configure basic piles with some simple code like geekcode
     def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
-    def to_s    ; puts "not implemented yet" ; raise end # the inverse of set
+    def to_s    ; raise "not implemented yet" ; end # the inverse of set
   end
 
   class DFHack::StockpileSettings
