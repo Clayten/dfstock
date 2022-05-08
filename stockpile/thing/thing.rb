@@ -6,21 +6,19 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module RawMaterials
-    def materials ; return [] unless respond_to? :raw ; raw.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
-    def material  ; materials.first end
+    def materials ; return [] unless respond_to? :raw ; r = raw rescue false ; return false unless r ; r.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
+    def material  ; materials.first if materials end
     def raws ; return false unless raw ; raw.raws.sort end
     def raw ; raise "#{self.class} does not have a raw definition" end
     def has_raw?      ; !!(raw      rescue nil) end
     def has_material? ; !!(material rescue nil) end
 
     def material_ids ; materials.map &:id end
-    def active_flags fs ; Hash[fs.inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def active_flags ms ; ms = [*ms] ; Hash[ms.map(&:flags).inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def mfah ; materials.inject({}) {|h,m| h[m.id] = active_flags m ; h } end
     def material_flags ms = nil
       return {} unless has_material?
-      ms = [*(ms || materials)]
-      active_flags([*ms].map(&:flags))
-      # cache(:material_flags, *ms.map(&:id)) {
-      # }
+      active_flags(ms || materials)
     end
     def raw_flags
       has_raw? ?  active_flags([raw.flags]) : {}
@@ -60,6 +58,11 @@ module DFStock
       false
     end
 
+    def self.[] n
+      t = Regexp.new n
+      instances.select {|i| i.token =~ t }
+    end
+
     # List all classes descended from this one
     def self.subclasses
       ObjectSpace.each_object.select {|o| o.is_a?(Class) && o < self }.sort_by(&:to_s)
@@ -93,6 +96,23 @@ module DFStock
     def state_color     ; material.state_color if material end
     def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if material end
     def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
+    def color
+      fore, back, bright = tile_color.to_a
+      fore, bright = basic_color.to_a
+      color_definitions[[fore, bright]]
+    end
+
+    def color_definitions
+      {[0,0] => :black,       [0,1] => :dark_gray,
+       [1,0] => :blue,        [1,1] => :light_blue,
+       [2,0] => :green,       [2,1] => :light_green,
+       [3,0] => :cyan,        [3,1] => :light_cyan,
+       [4,0] => :red,         [4,1] => :light_red,
+       [5,0] => :magenta,     [5,1] => :light_magenta,
+       [6,0] => :brown,       [6,1] => :yellow,
+       [7,0] => :light_gray,  [7,1] => :white
+      }
+    end
 
     # Cache lookups - this is pretty important for performance
     # @@cache = Hash.new {|h,k| h[k] = {} } unless @@cache if class_variables.include? :@@cache
