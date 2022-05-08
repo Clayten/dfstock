@@ -22,7 +22,8 @@ module DFStock
     def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
     def edible_raw?     ; material_flags[:EDIBLE_RAW] end
     def edible?         ; edible_cooked? || edible_raw? end
-    def brewable?       ; material_flags[:ALCOHOL_PLANT] && !%w(DRINK SEED MILL).include?(material.id) end
+    def alcohol_producing? ; has_material? && material_flags[:ALCOHOL_PLANT] end
+    def brewable?       ;  alcohol_producing? && !%w(DRINK SEED MILL).include?(material.id) end
     def millable?       ; mill? end
 
     def tree? ; raw.flags[:TREE] end
@@ -66,7 +67,11 @@ module DFStock
   end
 
   class PlantProduct < Plant
-    def self.plantproduct_indexes ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
+    # def self.plantproduct_category ; organic_category :PlantProduct end
+    # def self.plantproduct_types ; organic_types[plantproduct_category] end
+    def self.plantproduct_types ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
+    def self.plantproduct_material_infos ; plantproduct_types.map {|(c,i)| material_info c, i } end
+    def self.plantproduct_indexes ; (0 ... plantproduct_types.length).to_a end
     def self.plantproducts ; plantproduct_indexes.each_index.map {|i| PlantProduct.new i } end
     # def self.index_translation ; plantproduct_indexes end
 
@@ -90,7 +95,8 @@ module DFStock
 
     def material_info ; self.class.plantdrink_material_infos[plantdrink_index] end
     def material ; material_info.material end
-    def material_flags ; material.flags end # Only look at this material
+    def materials ; [material] end
+    # def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.plant end
     def token ; "#{material.state_name[:Liquid]}" end
     def to_s ; super + " plantdrink_index=#{plantdrink_index}" end
@@ -131,10 +137,6 @@ module DFStock
     def self.plantpowder_indexes ; (0 ... plantpowder_types.length).to_a end
     def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
 
-    # def self.plantpowder_indexes ; cache(:plantpowders) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
-    # def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
-    # def self.index_translation ; plantpowder_indexes end
-
     def plant_index ; self.class.plantpowder_indexes[plantpowder_index] end
     def to_s ; super + " plantpowder_index=#{plantpowder_index}" end
 
@@ -151,7 +153,7 @@ module DFStock
     def self.fruitleaf_category ; organic_category :Leaf end
     def self.fruitleaf_types ; organic_types[fruitleaf_category] end
     def self.fruitleaf_material_infos ; fruitleaf_types.map {|(t,i)| material_info t, i } end
-    def self.fruitleaf_indexes ; fruitleaf_material_infos.map {|mi| find_plant_index mi.plant } end
+    def self.fruitleaf_indexes ; (0 ... fruitleaf_types.length).to_a end
     def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
     # def self.index_translation ; fruitleaf_indexes end
 
@@ -219,7 +221,7 @@ module DFStock
     def self.plantfiber_category ; organic_category :PlantFiber end
     def self.plantfiber_types ; organic_types[plantfiber_category] end
     def self.plantfiber_material_infos ; plantfiber_types.map {|(c,i)| material_info c, i } end
-    def self.plantfiber_indexes ; plantfiber_material_infos.map {|mi| find_plant_index mi.plant } end
+    def self.plantfiber_indexes ; (0 ... plantfiber_types.length).to_a end
     def self.plantfibers ; plantfiber_indexes.each_index.map {|i| PlantFiber.new i } end
     # def self.index_translation ; plantfiber_indexes end
 
@@ -249,7 +251,7 @@ module DFStock
       }.compact
     end
     def self.paper_material_infos ; paper_types.map {|(c,i)| material_info c, i } end
-    def self.paper_indexes ; paper_material_infos.map {|mi| find_plant_index mi.plant } end
+    def self.paper_indexes ; (0 ... paper_types.length).to_a end
     def self.papers ; paper_indexes.each_index.map {|i| Paper.new i } end
     # def self.index_translation ; paper_indexes end
 
