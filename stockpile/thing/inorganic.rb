@@ -4,20 +4,31 @@ module DFStock
 
   module InorganicQueries
     def is_magma_safe?
-      # p [:ims?, self, :material, material]
-      return nil unless material && material.heat
+      # p [:ims?, self, :heat, material.heat]
+      return nil unless has_material? && material.heat
 
       magma_temp = 12000
       mft = material.heat.mat_fixed_temp
-      return true  if mft && mft != 60001
+      unless mft == 60001
+        # p [:checking, :material_fixed_temperature, mft]
+        return true if mft
+      end
 
       cdp = material.heat.colddam_point
-      return false if cdp && cdp != 60001 && cdp < magma_temp
+      unless cdp == 60001
+        # p [:checking, :colddam_point, cdp, :gt, magma_temp]
+        return false if cdp > magma_temp
+      end
 
-      %w(heatdam ignite melting boiling).all? {|n|
-        t = material.heat.send("#{n}_point")
-        t == 60001 || t > magma_temp
+      return false if %w(heatdam ignite melting boiling).any? {|n|
+        m = "#{n}_point".to_sym
+        t = material.heat.send m
+        next if t == 60001
+        # p [:checking, m, t, :lt, magma_temp]
+        t < magma_temp
       }
+
+      true
     end
   end
 
