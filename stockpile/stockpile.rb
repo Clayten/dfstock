@@ -186,13 +186,13 @@ module DFStock
   # -> 12
   module StockFinder
 
-    def stock_category_name   ; DFHack::BuildingStockpilest.stock_category_name   self end
-    def stock_category_method ; DFHack::BuildingStockpilest.stock_category_method self end
+    def stock_category_name   ; DFHack::StockpileSettings.stock_category_name   self end
+    def stock_category_method ; DFHack::StockpileSettings.stock_category_method self end
 
     # Look at all possible parents to find the one pointing to your memory
     def parent_stockpile
-      ObjectSpace.each_object(DFHack::BuildingStockpilest).find {|sp|
-        sp.z rescue next # guard against something ...?
+      ObjectSpace.each_object(DFHack::StockpileSettings).find {|sp|
+        sp.allow_organic rescue next # guard against uninitialized objects
         sp.send(stock_category_method)._memaddr == _memaddr
       }
     end
@@ -210,8 +210,8 @@ module DFStock
       true
     end
 
-    def     set x ; parent_stockpile.stock_flags.send "#{stock_category_method}=", !!x ; enabled? end
-    def     get   ; parent_stockpile.stock_flags.send "#{stock_category_method}" end
+    def     set x ; ps = parent_stockpile ; raise unless ps ; ps.flags.send "#{stock_category_method}=", !!x ; enabled? end
+    def     get   ; ps = parent_stockpile ; raise unless ps ; ps.flags.send "#{stock_category_method}" end
     def  enable   ; set true  end
     def disable   ; set false end
     def enabled?  ; !!get end
