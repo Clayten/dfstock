@@ -158,7 +158,7 @@ module DFStock
     def materials ; raw.material.select {|m| m.id =~ /EGG/ } end
     def material ; materials.find {|m| m.id =~ /YOLK/ } end
 
-    def token ; (raw.caste.first.caste_name.first.split(/\s+/) + ['egg']).map(&:capitalize).join(' ') end
+    def token ; title_case (raw.caste.first.caste_name.first.split(/\s+/) + ['egg']).join(' ') end
     def to_s ; super + " egg_index=#{egg_index}" end
 
     attr_reader :egg_index

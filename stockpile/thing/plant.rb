@@ -78,6 +78,8 @@ module DFStock
     def plant_index ; self.class.plantproduct_indexes[plantproduct_index] end
     def to_s ; super + " plantproduct_index=#{plantproduct_index}" end
 
+    def token ; title_case super end
+
     attr_reader :plantproduct_index
     def initialize index, link: nil
       @plantproduct_index = index
@@ -98,7 +100,7 @@ module DFStock
     def materials ; [material] end
     # def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.plant end
-    def token ; "#{material.state_name[:Liquid]}" end
+    def token ; title_case "#{material.state_name[:Liquid]}" end
     def to_s ; super + " plantdrink_index=#{plantdrink_index}" end
 
     attr_reader :plantdrink_index
@@ -157,18 +159,14 @@ module DFStock
     def self.fruitleaves ; fruitleaf_indexes.map {|i| FruitLeaf.new i } end
     # def self.index_translation ; fruitleaf_indexes end
 
-    def self.fruitleaf_growths
-
-    end
-
     def plant_index ; self.class.fruitleaf_indexes[fruitleaf_index] end
     def to_s ; super + " fruitleaf_index=#{fruitleaf_index}" end
     def raw ; material_info.plant end
     def material_info ; self.class.fruitleaf_material_infos[fruitleaf_index] end
     def material ; material_info.material end
     def materials ; [material] end
-    def growth ; self.class.fruitleaf_growths[fruitleaf_index] end # This plant might have two or more growths - find the correct one
-    def token ; title_case "#{raw.name} #{material.id}" end
+    def growth ; growths.find {|g| g.str_growth_item.include? material.id } end # This plant might have two or more growths - find the correct one
+    def token ; title_case "#{growth.name}" end
     attr_reader :fruitleaf_index
     def initialize index, link: nil
       @fruitleaf_index = index
@@ -186,6 +184,8 @@ module DFStock
     def plant_index ; self.class.seed_indexes[seed_index] end
     def index ; seed_index end
     def to_s ; super + " seed_index=#{seed_index}" end
+
+    def token ; title_case raw.seed_plural end
 
     attr_reader :seed_index
     def initialize index, link: nil
@@ -217,6 +217,7 @@ module DFStock
     end
   end
 
+  # Used for Thread and Cloth, so .token is just the plant name
   class PlantFiber < Plant
     def self.plantfiber_category ; organic_category :PlantFiber end
     def self.plantfiber_types ; organic_types[plantfiber_category] end
@@ -230,7 +231,7 @@ module DFStock
     def material ; material_info.material end
     def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.plant end
-    def token ; title_case material.state_name[:Solid] end
+    def token ; title_case raw.name end
     def to_s ; super + " plantfiber_index=#{plantfiber_index}" end
 
     attr_reader :plantfiber_index
@@ -332,6 +333,8 @@ module DFStock
     def value   ; wood.material_value if wood end
     def color   ; wood.build_color if wood end
     def density ; wood.solid_density if wood end
+
+    def token ; raw.name_plural end
 
     attr_reader :tree_index
     def initialize index, link: nil
