@@ -182,7 +182,7 @@ module DFStock
   # s = stockpile_at_cursor()
   # s.id
   # -> 12
-  # s.food.parent_stockpile.id
+  # s.food.parent.id
   # -> 12
   module StockFinder
 
@@ -190,10 +190,10 @@ module DFStock
     def stock_category_method ; DFHack::StockpileSettings.stock_category_method self end
 
     # Look at all possible parents to find the one pointing to your memory
-    def parent_stockpile
-      ObjectSpace.each_object(DFHack::StockpileSettings).find {|sp|
-        sp.allow_organic rescue next # guard against uninitialized objects
-        sp.send(stock_category_method)._memaddr == _memaddr
+    def parent
+      ObjectSpace.each_object(DFHack::StockpileSettings).find {|ss|
+        ss.allow_organic rescue next # guard against uninitialized objects
+        ss.send(stock_category_method)._memaddr == _memaddr
       }
     end
 
@@ -210,13 +210,13 @@ module DFStock
       true
     end
 
-    def     set x ; ps = parent_stockpile ; raise unless ps ; ps.flags.send "#{stock_category_method}=", !!x ; enabled? end
-    def     get   ; ps = parent_stockpile ; raise unless ps ; ps.flags.send "#{stock_category_method}" end
+    def     set x ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}=", !!x ; enabled? end
+    def     get   ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}" end
     def  enable   ; set true  end
     def disable   ; set false end
     def enabled?  ; !!get end
 
-    def all_other_categories ; parent_stockpile.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
+    def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
   end
 
 end
@@ -279,9 +279,8 @@ if self.class.const_defined? :DFHack
     def enable ; raise "Not functional, can't enable sub-categories" end
   end
 
-  # The main settings object needs to know about its categories and its parent physical implementation
-  class DFHack::StockpileSettings
 
+  class DFHack::StockpileSettings
     # From the classname of a category to the name the parent (this) uses to refer to that category
     # Categories in the order they appear in the stockpile
     def self.stock_categories
@@ -312,7 +311,17 @@ if self.class.const_defined? :DFHack
     # Object to stock-class method - Pile.settings.animals -> 'animal'
     def self.stock_category_method obj ; stock_categories[stock_category_name obj] end
 
-    def corpses ; @@corpses ||= {} ; @@corpses[self] ||= DFHack::StockpileSettings_TCorpse.new ; end
+    # Look at all possible parents to find the one pointing to your memory
+    def parent
+      stockpiles = ObjectSpace.each_object(DFHack::BuildingStockpilest).to_a
+      trackstops = ObjectSpace.each_object(DFHack::HaulingStop).to_a
+      (stockpiles + trackstops).find {|sp|
+        sp.settings rescue next # guard against uninitialized objects
+        sp.settings._memaddr == _memaddr
+      }
+    end
+
+    def corpses ; @@corpses ||= {} ; @@corpses[_memaddr] ||= DFHack::StockpileSettings_TCorpse.new ; end
 
     def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
@@ -357,8 +366,17 @@ if self.class.const_defined? :DFHack
     def inspect ; "#<#{to_s}>" end
   end
 
-  # The physical implementation of a stockpile
+
   class DFHack::BuildingStockpilest
+    alias settings_ settings unless instance_methods.include? :settings_
+    def settings ; @@settings ||= {} ; @@settings[_memaddr] ||= settings_ end
+  end
+  class DFHack::HaulingStop
+    alias settings_ settings unless instance_methods.include? :settings_
+    def settings ; @@settings ||= {} ; @@settings[_memaddr] ||= settings_ end
+  end
+
+  module DFHack::StockForwarder
     # Wrappers to allow the stockpile to be used as the settings object itself.
     def allow_organic       ; settings.allow_organic end
     def allow_organic=   b  ; settings.allow_organic= b end
@@ -383,6 +401,29 @@ if self.class.const_defined? :DFHack
     def sheet               ; settings.sheet end
 
     def all_items           ; settings.all_items end
+  end
+
+  class DFHack::HaulingStop
+    include DFHack::StockForwarder
+
+    def status
+      puts "Trackstop ##{id} - #{name.inspect}"
+
+      links = get_links[:stockpile]
+      give, take = links[:give], links[:take]
+      puts "Incoming Stockpile Links: #{take.length} - #{ take.map(&:name).join(', ')}"
+      puts "Outgoing Stockpile Links: #{give.length} - #{ give.map(&:name).join(', ')}"
+
+      puts "StockSelection:"
+      settings.status
+
+      true
+    end
+  end
+
+
+  class DFHack::BuildingStockpilest
+    include DFHack::StockForwarder
 
     def status
       puts "Stockpile ##{stockpile_number} - #{name.inspect}"
@@ -392,13 +433,13 @@ if self.class.const_defined? :DFHack
       puts "Mode: #{use_links_only == 1 ? 'Use Links Only' : 'Take From Anywhere'}"
 
       puts "Linked Stops: #{linked_stops.length} #{linked_stops.map(&:name).join}"
-      puts "Incoming Stockpile Links: #{links.take_from_pile.length} #{
+      puts "Incoming Stockpile Links: #{links.take_from_pile.length} - #{
         links.take_from_pile.map(&:name).join(', ')}"
-      puts "Outgoing Stockpile Links: #{links.give_to_pile.length} #{
+      puts "Outgoing Stockpile Links: #{links.give_to_pile.length} - #{
         links.give_to_pile.map(&:name).join(', ')}"
-      puts "Incoming Workshop Links: #{links.take_from_workshop.length} #{
+      puts "Incoming Workshop Links: #{links.take_from_workshop.length} - #{
         links.take_from_workshop.map {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
-      puts "Outgoing Workshop Links: #{links.give_to_workshop.length} #{
+      puts "Outgoing Workshop Links: #{links.give_to_workshop.length} - #{
         links.give_to_workshop.map   {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
 
       puts "StockSelection:"
