@@ -64,17 +64,31 @@ module DFStockalyzer
     end
 
     def analyze
+      linkables = buildings.select {|b| b.respond_to? :get_links }
+
+      display_cursor = false
+      # Piles and Workshops and Trackstops should be named
+      linkables.each {|l|
+        next unless l.name.empty?
+        next if l.get_links.values.map(&:values).flatten.empty?  # Don't mention a building/workshop/trackstop unless it has links
+        display_cursor = p [:analyze, df.cursor] unless display_cursor
+        puts "WARN: #{l.class} at x:#{l.x1},y:#{l.y1} on z:#{l.z} is unnamed"
+      }
+
       links = Hash.new {|h,k| h[k] = [] }
 
       # and track stops
-      stockpiles.each {|sp|
-        p [:sp, sp.id, sp.name, sp.getType]
-        gp, tp, gw, tw = %w(give_to_pile take_from_pile give_to_workshop take_from_workshop).map {|n| sp.links.send(n).to_a }
-        links[[sp.id, sp.name]]
-        gp.each {|pl| links[[pl.id, pl.name]] << [:sp, sp.id, sp.name] }
-        gw.each {|ws| links[[ws.id, ws.name]] << [:sw, sp.id, sp.name] }
-        tp.each {|pl| links[[sp.id, sp.name]] << [:wp, pl.id, pl.name] }
-        tw.each {|ws| links[[sp.id, sp.name]] << [:ww, ws.id, ws.name] }
+      linkables.each {|l|
+        name = !l.name.empty? ? l.name : "#{l.class} #{l.id}"
+        # p [:linkable, l.class, l.name, l.getType]
+        l.get_links.each {|type, sub_links|
+          sub_links.each {|dir, link_names|
+            link_names.each {|link|
+              link_name = link.name
+              links[[name, dir]] << link_name
+            }
+          }
+        }
       }
 
       links
@@ -256,25 +270,72 @@ module DFStock
   # end
 end
 
-class ::DFHack::Building
-  def get_links
-    links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
-    if respond_to? :links
-      links[:stockpile][:give] =        self.links.give_to_pile.to_a
-      links[:stockpile][:take] =        self.links.take_from_pile.to_a
-      links[:workshop ][:give] =        self.links.give_to_workshop.to_a
-      links[:workshop ][:take] =        self.links.take_from_workshop.to_a
-    elsif respond_to? :getStockpileLinks
-      links[:stockpile][:give] = getStockpileLinks.give_to_pile.to_a
-      links[:stockpile][:take] = getStockpileLinks.take_from_pile.to_a
+if self.class.const_defined?(:DFHack)
+  module DFHack
+    module Linkable
+      # Check for a link between this pile and a pile or workshop with a given name
+      #
+      # By default, an indirect link via a Quantum Storage Pile is allowed, if the QSP is called
+      # the same as the source pile + 'QSP', and the QSP links to the desired target.
+      #
+      # To specifically check that a QSP is not used, set allow_qsp: false
+      # To specifically check for a QSP, use its full name, set allow_qsp: false, and check the give and take links manually
+      def check_for_link link_name, target_type: :stockpile, direction: :give, allow_qsp: true, return_link: false
+        # p [:check_for_link, name, direction, link_name, :allow_qsp, allow_qsp]
+        raise "Incorrect usage, pile name or target pile name contains 'QSP' and allow_qsp is true." if allow_qsp && (name =~ /QSP$/ || link_name =~ /QSP$/)
+        raise "Incorrect usage, target_type must be :workshop or :stockpile" unless [:workshop, :stockpile].include? target_type
+        raise "Incorrect usage, direction must be :give or :take" unless [:give, :take].include? direction
+
+        links = get_links[target_type][direction]
+
+        link = links.find {|link| link.name == link_name }
+        return (return_link ? link : true) if link
+
+        return false unless allow_qsp
+        if direction == :give
+          return false unless link = check_for_link(     "#{name}QSP",  target_type: :stockpile,  direction: :give, allow_qsp: false, return_link: true)
+                                link.check_for_link(   link_name,       target_type: target_type, direction: :give, allow_qsp: false, return_link: return_link)
+        else
+          return false unless link = check_for_link("#{link_name}QSP",  target_type: :stockpile,  direction: :take, allow_qsp: false, return_link: true)
+                                link.check_for_link(   link_name,       target_type: target_type, direction: :take, allow_qsp: false, return_link: return_link)
+        end
+      end
     end
-    links
+
+    class HaulingStop
+      include Linkable
+      def get_links
+        links = Hash.new {|h,k| h[k] = [] }
+        stockpiles.each {|link|
+          mode = link.mode.give ? :give : :take
+          building = df.world.buildings.all.find {|b| b.id == link.building_id }
+          links[mode] << building
+        }
+        {:stockpile => links}
+      end
+    end
+
+    class BuildingStockpilest
+      include Linkable
+      def get_links
+        links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
+        links[:stockpile][:give] =        self.links.give_to_pile.to_a
+        links[:stockpile][:take] =        self.links.take_from_pile.to_a
+        links[:workshop ][:give] =        self.links.give_to_workshop.to_a
+        links[:workshop ][:take] =        self.links.take_from_workshop.to_a
+        links
+      end
+    end
+
+    class BuildingWorkshopst
+      include Linkable
+      def get_links
+        links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
+        links[:stockpile][:give] = getStockpileLinks.give_to_pile.to_a
+        links[:stockpile][:take] = getStockpileLinks.take_from_pile.to_a
+        links
+      end
+    end
   end
 
-  def check_for_link name, type: :stockpile, direction: :give
-    method = (direction == :give ? 'give_to_' : 'take_from_') + (type == :stockpile ? 'pile' : 'workshop')
-    all_links = send(getType == :Stockpile ? :links : :getStockpileLinks)
-    links = all_links.send method
-    links.any? {|link| link.name == name}
-  end
-end if self.class.const_defined?(:DFHack)
+end
