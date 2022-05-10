@@ -59,7 +59,8 @@ module DFStock
     end
 
     def self.[] n
-      t = Regexp.new n
+      n = n.source if n.respond_to? :source
+      t = Regexp.new n, Regexp::IGNORECASE
       instances.select {|i| i.token =~ t }
     end
 
@@ -144,6 +145,8 @@ module DFStock
     def self.index_translation
       send(classname + '_indexes')
     end
+
+    def == o ; self.class == o.class && index == o.index end
 
     attr_reader :index
     def initialize index, link: nil
