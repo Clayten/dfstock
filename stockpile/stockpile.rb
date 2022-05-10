@@ -279,6 +279,8 @@ if self.class.const_defined? :DFHack
     def enable ; raise "Not functional, can't enable sub-categories" end
   end
 
+  # The main settings object needs to know about its categories and its parent physical implementation
+  class DFHack::StockpileSettings
 
     # From the classname of a category to the name the parent (this) uses to refer to that category
     # Categories in the order they appear in the stockpile
@@ -287,6 +289,7 @@ if self.class.const_defined? :DFHack
         Animals: 'animals',
         Food: 'food',
         Furniture: 'furniture',
+        Corpse: 'corpses',
         Refuse: 'refuse',
         Stone: 'stone',
         Ammo: 'ammo',
@@ -302,21 +305,90 @@ if self.class.const_defined? :DFHack
         Sheet: 'sheet'
       }
     end
+
+    # Class to stock-class name - DFHack::StockpileSettings_TAnimals -> :Animals
     def self.stock_category_name obj ; obj.class.to_s.split(/_T/).last.to_sym end
+
+    # Object to stock-class method - Pile.settings.animals -> 'animal'
     def self.stock_category_method obj ; stock_categories[stock_category_name obj] end
+
+    def corpses ; @@corpses ||= {} ; @@corpses[self] ||= DFHack::StockpileSettings_TCorpse.new ; end
 
     def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
     def all_items ; categories.map {|_,c| c.all_items }.flatten end
 
+    def enabled ; all_items.map {|i| i if i.linked? && i.enabled? } end
+
+    # WARNING: Only items, not other settings
+    def == o ; enabled == o.enabled end
+
+    # Our items minus the other pile's items
+    def - other
+      other_items = other.enabled
+      enabled.each_with_index.map {|e, i|
+        break if i > 20
+        o - other_items[i]
+        r = e && !o
+        p [i,e,o,r]
+        e if r
+      }
+    end
+
+    def set_enabled list
+      raise "Not a proper match - there should be #{all_items.length} bools" unless items.length == all_items.length
+      all_items.each_with_index {|item,i| item.set !!list[i] }
+    end
+
     def status
-# "# of Incoming Stockpile Links: #{x.links.take_from_pile.length} - # of Outgoing Stockpile Links: #{x.links.give_to_pile.length}",
-# "# of Incoming Workshop Links: #{x.links.take_from_workshop.length} - # of Outgoing Workshop Links: #{x.links.give_to_workshop.length}",
+      puts "Allow Organics: #{allow_organic}. Allow Inorganics: #{allow_inorganic}"
+
+      categories.each {|k, c|
+        puts "#{'%20s' % k} #{c.enabled?}"
+      }
+      true
+    end
+
+    # Intended to quickly configure basic piles with some simple code like geekcode
+    def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
+    def to_s    ; raise "not implemented yet" ; end # the inverse of set
+
+    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
+    def inspect ; "#<#{to_s}>" end
+  end
+
+  # The physical implementation of a stockpile
+  class DFHack::BuildingStockpilest
+    # Wrappers to allow the stockpile to be used as the settings object itself.
+    def allow_organic       ; settings.allow_organic end
+    def allow_organic=   b  ; settings.allow_organic= b end
+    def allow_inorganic     ; settings.allow_inorganic end
+    def allow_inorganic= b  ; settings.allow_inorganic= b end
+    def stock_flags         ; settings.flags end # renamed to avoid conflict
+    def animals             ; settings.animals end
+    def food                ; settings.food end
+    def furniture           ; settings.furniture end
+    def refuse              ; settings.refuse end
+    def stone               ; settings.stone end
+    def ammo                ; settings.ammo end
+    def coins               ; settings.coins end
+    def bars_blocks         ; settings.bars_blocks end
+    def gems                ; settings.gems end
+    def finished_goods      ; settings.finished_goods end
+    def leather             ; settings.leather end
+    def cloth               ; settings.cloth end
+    def wood                ; settings.wood end
+    def weapons             ; settings.weapons end
+    def armor               ; settings.armor end
+    def sheet               ; settings.sheet end
+
+    def all_items           ; settings.all_items end
+
+    def status
       puts "Stockpile ##{stockpile_number} - #{name.inspect}"
       puts "# Max Barrels: #{max_barrels} - # Max Bins: #{max_bins} - # Max Wheelbarrows: #{max_wheelbarrows}"
       bins, barrels = [:BIN, :BARREL].map {|t| container_type.select {|i| i == t }.length }
       puts "# of Containers: #{container_type.length}, bins: #{bins}, barrels: #{barrels}"
-      puts "Allow Organics: #{allow_organic}. Allow Inorganics: #{allow_inorganic}"
       puts "Mode: #{use_links_only == 1 ? 'Use Links Only' : 'Take From Anywhere'}"
 
       puts "Linked Stops: #{linked_stops.length} #{linked_stops.map(&:name).join}"
@@ -329,19 +401,10 @@ if self.class.const_defined? :DFHack
       puts "Outgoing Workshop Links: #{links.give_to_workshop.length} #{
         links.give_to_workshop.map   {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
 
-      categories.each {|k, c|
-        puts "#{'%20s' % k} #{c.enabled?}"
-      }
+      puts "StockSelection:"
+      settings.status
+
       true
     end
-
-    # Intended to quickly configure basic piles with some simple code like geekcode
-    def set str ; puts "Setting stockpile acceptance to '#{str}'" ; raise end
-    def to_s    ; raise "not implemented yet" ; end # the inverse of set
-  end
-
-  class DFHack::StockpileSettings
-    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
-    def inspect ; "#<#{to_s}>" end
   end
 end
