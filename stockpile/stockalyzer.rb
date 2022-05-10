@@ -2,18 +2,15 @@
 module DFStockalyzer
   extend DwarfFortressUtils::API
   class << self
-    def buildings ; df.world.buildings.all end
 
-    def find_building_by_id          id ; buildings.find   {|b| b.id    == id    } end
-    def select_buildings_by_class klass ; buildings.select {|b| b.class == klass } end
-
+    def find_building_by_id id ; buildings.find {|b| b.id == id } end
     def building_type_by_id id
       building = find_building_by_id id
       [building.getType, (building.type rescue nil)]
     end
 
-    def stockpiles ; select_buildings_by_class DFHack::BuildingStockpilest end
-    def trackstops ; select_buildings_by_class DFHack::BuildingTrapst end
+    def stockpiles ; buildings_by_type :stockpile end
+    def trackstops ; buildings_by_type :trackstop end
 
     # Traverse piles and move items that will flow
     def flow_all_items
@@ -125,107 +122,138 @@ module DFStockalyzer
   ::DFZ = self unless const_defined? :DFZ
 end
 
+# DFHack::BuildingStockpilest
+#   set_artifacts / etc
+#   setup_by_name
+#
+# DFStock
+#   buildings_by_type
+#   check_artifacts
+#   check_for_stockpiles
+#   setup_stockpiles
+#
+# Building
+#   get_links
+#   check_for_link
+#
+# Run DFHack, call 'rb DFStock.setup_stockpiles', add and name piles, QSP piles, and workshops, as requested. rerun command until finished
+#
+
 if self.class.const_defined? :DFHack
   class DFHack::BuildingStockpilest
-    # disable non-artifactable categories
-    # try to enable artifactable cats - in the meantime, prompt
-    # disable non-artifact qualities
-    def set_artifacts
-      puts "Setting up artifacts pile #{id}"
-      puts "Your artifacts pile should be named 'ArtifactsP'" if name != 'ArtifactsP'
-      self.max_wheelbarrows = 0 # It might slow down a large furniture, but should speed up all other artifact placements
-      categories.each {|name, category|
-        if category.respond_to? :quality_core
-          next p [:please_enable, name] unless category.enabled?
-          # category.enable
-          category.allow_all
-          category.quality_total[0...-1].each(&:disable)
-        else
-          category.disable
+    # module Bar
+    #   def bar ; end
+    # end
+    # include Bar
+
+    module PileSetup
+      # disable non-artifactable categories
+      # try to enable artifactable cats - in the meantime, prompt
+      # disable non-artifact qualities
+      def set_artifacts
+        raise "Artifacts pile should be named 'Artifacts'" unless name == 'Artifacts'
+        puts "Setting up artifacts pile #{id}"
+        self.max_wheelbarrows = 0 # It might slow down a large furniture, but should speed up all other artifact placements
+        categories.each {|name, category|
+          if category.respond_to? :quality_core
+            next p [:please_enable, name] unless category.enabled?
+            # category.enable
+            category.allow_all
+            category.quality_total[0...-1].each(&:disable)
+          else
+            category.disable
+          end
+        }
+      end
+
+      def set_no_artifacts
+        raise "Non-artifacts pile should NOT be named 'Artifacts'" if name == 'Artifacts'
+        categories.each {|name, category|
+          if category.respond_to? :quality_core
+            category.quality_core.last.disable
+            category.quality_total.last.disable
+          end
+        }
+        true
+      end
+
+      def set_kitchen
+        raise "Kitchen pile should be named 'Kitchen'" unless name == 'Kitchen'
+        puts "Setting up kitchen pile #{id}"
+        self.max_wheelbarrows = 0
+        food.all_other_categories.each &:disable
+        food.all_items.each {|food|
+          next food.disable unless food.respond_to? :edible_cooked?
+          brewable = food.respond_to?(:brewable?) && food.brewable?
+          food.set(food.edible_cooked? && !brewable)
+        }
+        food.glob_fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
+        food.liquid_animal.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
+        food.seeds.each(&:disable) # technically cookable, but wasteful without proper management
+        food.drink_plant.each(&:disable)
+        food.drink_animal.each(&:disable)
+
+        if !check_for_link 'Kitchen', type: :workshop
+          puts "Kitchen stockpile should be linked to a kitchen named 'Kitchen'."
         end
-      }
-    end
+      end
 
-    def set_no_artifacts
-      puts "Your non-artifacts pile should NOT be named 'ArtifactsP'" if name == 'ArtifactsP'
-      categories.each {|name, category|
-        if category.respond_to? :quality_core
-          category.quality_core.last.disable
-          category.quality_total.last.disable
+      def set_prep_kitchen
+        raise "Prep-kitchen pile should be named 'Prep Kitchen'" unless name == 'Prep Kitchen'
+        puts "Setting up prep-kitchen pile #{id}"
+        self.max_wheelbarrows = 0
+        food.all_other_categories.each &:disable
+        food.block_all
+        food.glob_fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
+        if !check_for_link 'Prep Kitchen', type: :workshop
+          puts "Prep kitchen stockpile should be linked to a kitchen named 'Prep Kitchen'."
         end
-      }
-    end
+      end
 
-    def set_kitchen
-      puts "Your kitchen pile should be named 'KitchenP'" if name != 'KitchenP'
-      puts "Setting up kitchen pile #{id}"
-      self.max_wheelbarrows = 0
-      food.all_other_categories.each &:disable
-      food.all_items.each {|food|
-        next food.disable unless food.respond_to? :edible_cooked?
-        brewable = food.respond_to?(:brewable?) && food.brewable?
-        food.set(food.edible_cooked? && !brewable)
-      }
-      food.glob_fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
-      food.liquid_animal.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
-      food.seeds.each(&:disable) # technically cookable, but wasteful without proper management
-      food.drink_plant.each(&:disable)
-      food.drink_animal.each(&:disable)
+      def set_brewery_plants
+        raise "Brewery plants pile should be named 'Brewery Plants'" unless name == 'Brewery Plants'
+        puts "Setting up brewery plants #{id}"
+        self.max_wheelbarrows = 0
+        food.all_other_categories.each &:disable
+        food.all_items.each {|food|
+          next food.disable unless food.respond_to? :brewable?
+          food.set food.brewable?
+        }
+        if !check_for_link 'Brewery', type: :workshop
+          puts "Brewery plants stockpile should be linked to a Still named 'Brewery'."
+        end
+      end
 
-      if !check_for_link 'Kitchen', type: :workshop
-        puts "Your kitchen stockpile should be linked to a Kitchen named 'Kitchen'."
+      def set_brewery_barrels
+        raise "Brewery barrels pile should be named 'Brewery Barrels'" unless name == 'Brewery Barrels'
+        puts "Setting up brewery barrels #{id}"
+        self.max_wheelbarrows = 0
+        furniture.all_other_categories.each &:disable
+        furniture.type.each &:disable
+        furniture.type.find {|f| f.token == 'Barrel' }.enable
+        furniture.type.find {|f| f.token == 'Food Storage' }.enable # Large Pots
+        if !check_for_link 'Brewery', type: :workshop
+          puts "Brewery barrels stockpile should be linked to a Still named 'Brewery'."
+        end
+      end
+
+      def check_qsp
+         name =~ /QSP$/
+      end
+
+      def setup_by_name
+        case name
+        when 'Kitchen'         ; set_kitchen
+        when 'Prep Kitchen'    ; set_prep_kitchen
+        when 'Brewery Plants'  ; set_brewery_plants
+        when 'Brewery Barrels' ; set_brewery_barrels
+        when 'Artifacts'       ; set_artifacts
+        else ; puts "Skipping unknown type of stockpile - id: #{id}, name: #{name}, Pos: #{x1},#{y1} to #{x2},#{y2} on z: #{z}"
+        end
+        set_no_artifacts unless name == 'Artifacts'
       end
     end
-
-    def set_prep_kitchen
-      puts "Your prep-kitchen pile should be named 'Prep KitchenP'" if name != 'Prep KitchenP'
-      puts "Setting up prep-kitchen pile #{id}"
-      self.max_wheelbarrows = 0
-      food.all_other_categories.each &:disable
-      food.block_all
-      food.glob_fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
-      if !check_for_link 'Prep Kitchen', type: :workshop
-        puts "Your prep kitchen stockpile should be linked to a Kitchen named 'Prep Kitchen'."
-      end
-    end
-
-    def set_brewery_plants
-      puts "Your brewery plants pile should be named 'Brewery PlantsP'" if name != 'Brewery PlantsP'
-      puts "Setting up brewery plants #{id}"
-      self.max_wheelbarrows = 0
-      food.all_other_categories.each &:disable
-      food.all_items.each {|food|
-        next food.disable unless food.respond_to? :brewable?
-        food.set food.brewable?
-      }
-      if !check_for_link 'Brewery', type: :workshop
-        puts "Your brewery plants stockpile should be linked to a Still named 'Brewery'."
-      end
-    end
-
-    def set_brewery_barrels
-      puts "Your brewery plants pile should be named 'Brewery BarrelsP'" if name != 'Brewery BarrelsP'
-      puts "Setting up brewery barrels #{id}"
-      self.max_wheelbarrows = 0
-      furniture.all_other_categories.each &:disable
-      furniture.type.each &:disable
-      furniture.type.find {|f| f.token == 'Barrel' }.enable
-      if !check_for_link 'Brewery', type: :workshop
-        puts "Your brewery barrels stockpile should be linked to a Still named 'Brewery'."
-      end
-    end
-
-    def setup_by_name
-      case name
-      when 'KitchenP'         ; set_kitchen
-      when 'Prep KitchenP'    ; set_prep_kitchen
-      when 'Brewery PlantsP'  ; set_brewery_plants
-      when 'Brewery BarrelsP' ; set_brewery_barrels
-      when 'ArtifactsP'       ; set_artifacts
-      else ; # puts "Skipping unknown type of stockpile - id: #{id}, name: #{name}"
-      end
-      set_no_artifacts unless name == 'ArtifactsP'
-    end
+    include PileSetup
   end
 end
 
@@ -239,7 +267,7 @@ module DFStock
     stockpiles = buildings_by_type(:stockpile)
     artifacts, regular = stockpiles.partition {|s| s.name =~ /^artifactsp$/i }
     if artifacts.length > 1
-      puts "You should only have one Artifacts stockpile"
+      puts "There should only be one Artifacts stockpile"
       return false
     end
   end
@@ -248,9 +276,9 @@ module DFStock
     stockpiles = buildings_by_type(:stockpile)
     types = %w(kitchen prep_kitchen brewery_plants brewery_barrels artifacts)
     types.each {|type|
-      pile_name = type.gsub(/_/,' ').split(/\s+/).map(&:capitalize).join(' ') + 'P'
+      pile_name = type.gsub(/_/,' ').split(/\s+/).map(&:capitalize).join(' ')
       piles = stockpiles.select {|s| s.name == pile_name }
-      puts "You should have a stockpile named #{pile_name}" if piles.empty?
+      puts "There should be a stockpile named #{pile_name}" if piles.empty?
     }
     true
   end
