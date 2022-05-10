@@ -63,7 +63,7 @@ module DFStock
           arrays << [actual_name, desired_name, base_name]
           # p [:define_array, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
-            raise "Ack!" unless klass.instance_methods.include?(actual_name)
+            raise "Ack! Trying to add #{actual_name} to #{stockklass}" unless klass.instance_methods.include?(actual_name)
             klass.class_eval "alias #{base_name} #{actual_name}"
           end
           klass.send(:define_method, desired_name) {|&b|
