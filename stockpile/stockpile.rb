@@ -6,7 +6,7 @@ module DFStock
   #
   # These are the definitions of the stockpile-settings accessors we will create.
   #
-  # These use the Scaffold plugin to link Thing classes to menu option.
+  # These use the Scaffold plugin to link Thing classes to menu options.
   #
   ###
 
@@ -19,7 +19,7 @@ module DFStock
 
   module FoodMod
     extend Scaffold
-    add_flag(:prepared_meals) # this is expected to be ignored because it's a no-op
+    add_flag(:prepared_meals)
     add_array(Meat,             :meat)
     add_array(Fish,             :fish)
     add_array(UnpreparedFish,   :unprepared_fish)
@@ -30,10 +30,10 @@ module DFStock
     add_array(PlantCheese,      :cheese_plant)
     add_array(CreatureCheese,   :cheese_animal)
     add_array(Seed,             :seeds)
-    add_array(FruitLeaf,        :leaves)
+    add_array(FruitLeaf,        :leaves, :fruitleaves)
     add_array(PlantPowder,      :powder_plant)
     add_array(CreaturePowder,   :powder_creature)
-    add_array(Fat,              :glob,        :glob_fat)
+    add_array(Fat,              :glob, :glob_fat)
     add_array(Paste,            :glob_paste)
     add_array(Pressed,          :glob_pressed)
     add_array(PlantExtract,     :liquid_plant)
