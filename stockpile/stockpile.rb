@@ -222,48 +222,63 @@ module DFStock
 end
 
 if self.class.const_defined? :DFHack
-  class DFHack::StockpileSettings_TAnimals       ; include DFStock::StockFinder, DFStock::AnimalMod end
-  class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod
-    def cookable ; raise ; end # just the items, across sub-categories, that need a kitchen to become food
-  end
-  class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod end
-  # Corpses
-  class DFHack::StockpileSettings_TRefuse        ; include DFStock::StockFinder, DFStock::RefuseMod end
-  class DFHack::StockpileSettings_TStone         ; include DFStock::StockFinder, DFStock::StoneMod end
-  class DFHack::StockpileSettings_TAmmo          ; include DFStock::StockFinder, DFStock::AmmoMod end
-  class DFHack::StockpileSettings_TCoins         ; include DFStock::StockFinder, DFStock::CoinMod end
-  class DFHack::StockpileSettings_TBarsBlocks    ; include DFStock::StockFinder, DFStock::BarsBlocksMod end
-  class DFHack::StockpileSettings_TGems          ; include DFStock::StockFinder, DFStock::GemsMod end
-  class DFHack::StockpileSettings_TFinishedGoods ; include DFStock::StockFinder, DFStock::FinishedGoodsMod end
-  class DFHack::StockpileSettings_TLeather       ; include DFStock::StockFinder, DFStock::LeatherMod end
-  class DFHack::StockpileSettings_TCloth         ; include DFStock::StockFinder, DFStock::ClothMod end
-  class DFHack::StockpileSettings_TWood          ; include DFStock::StockFinder, DFStock::WoodMod end
-  class DFHack::StockpileSettings_TWeapons       ; include DFStock::StockFinder, DFStock::WeaponsMod end
-  class DFHack::StockpileSettings_TArmor         ; include DFStock::StockFinder, DFStock::ArmorMod end
-  class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, DFStock::SheetMod end
 
-  class DFHack::BuildingStockpilest
-    def allow_organic      ; settings.allow_organic end
-    def allow_organic=   b ; settings.allow_organic= b end
-    def allow_inorganic    ; settings.allow_inorganic end
-    def allow_inorganic= b ; settings.allow_inorganic= b end
-    def stock_flags        ; settings.flags end
-    def animals            ; settings.animals end
-    def food               ; settings.food end
-    def furniture          ; settings.furniture end
-    def refuse             ; settings.refuse end
-    def stone              ; settings.stone end
-    def ammo               ; settings.ammo end
-    def coins              ; settings.coins end
-    def bars_blocks        ; settings.bars_blocks end
-    def gems               ; settings.gems end
-    def finished_goods     ; settings.finished_goods end
-    def leather            ; settings.leather end
-    def cloth              ; settings.cloth end
-    def wood               ; settings.wood end
-    def weapons            ; settings.weapons end
-    def armor              ; settings.armor end
-    def sheet              ; settings.sheet end
+  # The Settings Categories are intended to have accessors for classes of items
+  class DFHack::StockpileSettings_TAnimals       ; include DFStock::StockFinder, DFStock::AnimalMod
+    def enable ; raise "Not functional, doesn't enable entries" end
+  end
+  class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+    def cookable      ; raise ; end # just the items, across sub-categories, that can become a meal in a kitchen
+    def needs_cooking ; raise ; end # just the items, across sub-categories, that need a kitchen to become food
+  end
+  class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod
+    def enable ; raise "Not functional, doesn't enable entries" end
+  end
+  class DFHack::StockpileSettings_TCorpse        ; include DFStock::StockFinder
+    def _memaddr ; hash end # Fake, just to identify the same instance
+    def arrays ; {} end # No arrays of items
+  end
+  class DFHack::StockpileSettings_TRefuse        ; include DFStock::StockFinder, DFStock::RefuseMod
+    def enable ; raise "Not functional, crashes" end
+  end
+  class DFHack::StockpileSettings_TStone         ; include DFStock::StockFinder, DFStock::StoneMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TAmmo          ; include DFStock::StockFinder, DFStock::AmmoMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TCoins         ; include DFStock::StockFinder, DFStock::CoinMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TBarsBlocks    ; include DFStock::StockFinder, DFStock::BarsBlocksMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TGems          ; include DFStock::StockFinder, DFStock::GemsMod
+    def enable ; raise "Not functional, crashes" end
+  end
+  class DFHack::StockpileSettings_TFinishedGoods ; include DFStock::StockFinder, DFStock::FinishedGoodsMod
+    def enable ; raise "Not functional, crashes" end
+  end
+  class DFHack::StockpileSettings_TLeather       ; include DFStock::StockFinder, DFStock::LeatherMod
+    def enable ; raise "Not functional, doesn't enable entries" end
+  end
+  class DFHack::StockpileSettings_TCloth         ; include DFStock::StockFinder, DFStock::ClothMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TWood          ; include DFStock::StockFinder, DFStock::WoodMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TWeapons       ; include DFStock::StockFinder, DFStock::WeaponsMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TArmor         ; include DFStock::StockFinder, DFStock::ArmorMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+  class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, DFStock::SheetMod
+    def enable ; raise "Not functional, can't enable sub-categories" end
+  end
+
 
     # From the classname of a category to the name the parent (this) uses to refer to that category
     # Categories in the order they appear in the stockpile
