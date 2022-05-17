@@ -39,7 +39,7 @@ module DFStock
     def self.inorganics ; inorganic_indexes.each_index.map {|i| Inorganic.new i } end
     # def self.index_translation ; inorganic_indexes end
 
-    def raw ; self.class.inorganic_raws[index] end
+    def raw ; self.class.inorganic_raws[link_index] end
     def materials ; [raw.material] end
 
     def token ; material.state_name[:Solid] end
@@ -72,7 +72,12 @@ module DFStock
       !material.flags[:NO_STONE_STOCKPILE]
     end
 
+    def to_s ; super + " inorganic_index=#{inorganic_index}" end
+
+    attr_reader :inorganic_index
+    alias index inorganic_index
     def initialize index, link: nil
+      @inorganic_index = index
       super
     end
   end
@@ -86,6 +91,7 @@ module DFStock
     def to_s ; super + " metal_index=#{metal_index}" end
 
     attr_reader :metal_index
+    alias index metal_index
     def initialize index, link: nil
       @metal_index = index
       super inorganic_index, link: link
@@ -101,6 +107,7 @@ module DFStock
     def to_s ; super + " gem_index=#{gem_index}" end
 
     attr_reader :gem_index
+    alias index gem_index
     def initialize index, link: nil
       @gem_index = index
       super stone_index, link: link
@@ -117,6 +124,7 @@ module DFStock
     def to_s ; super + " cutstone_index=#{cutstone_index}" end
 
     attr_reader :cutstone_index
+    alias index cutstone_index
     def initialize index, link: nil
       @cutstone_index = index
       super stone_index, link: link
@@ -137,6 +145,7 @@ module DFStock
     def to_s ; super + " stone_index=#{stone_index}" end
 
     attr_reader :stone_index
+    alias index stone_index
     def initialize index, link: nil
       @stone_index = index
       super inorganic_index, link: link
@@ -151,6 +160,7 @@ module DFStock
     def to_s ; super + " ore_index=#{ore_index}" end
 
     attr_reader :ore_index
+    alias index ore_index
     def initialize index, link: nil
       @ore_index = index
       super stone_index, link: link
@@ -165,6 +175,7 @@ module DFStock
     def to_s ; super + " economic_index=#{economic_index}" end
 
     attr_reader :economic_index
+    alias index economic_index
     def initialize index, link: nil
       @economic_index = index
       super stone_index, link: link
@@ -179,6 +190,7 @@ module DFStock
     def to_s ; super + " other_index=#{other_index}" end
 
     attr_reader :other_index
+    alias index other_index
     def initialize index, link: nil
       @other_index = index
       super stone_index, link: link
@@ -193,6 +205,7 @@ module DFStock
     def to_s ; super + " clay_index=#{clay_index}" end
 
     attr_reader :clay_index
+    alias index clay_index
     def initialize index, link: nil
       @clay_index = index
       super stone_index, link: link

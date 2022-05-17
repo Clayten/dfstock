@@ -3,7 +3,8 @@ require 'thing/thing'
 module DFStock
 
   module CreatureQueries
-    def is_creature? ; cache(:creature, creature_index) { raw.respond_to?(:creature_id) && !flags[:EQUIPMENT_WAGON] } end
+    def is_wagon?    ; flags[:EQUIPMENT_WAGON] end
+    def is_creature? ; cache(:creature, creature_index) { raw.respond_to?(:creature_id) && !is_wagon? } end
 
     def is_stockpile_animal?
       cache(:stockpile_animal, creature_index) { is_creature? && raw.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/ }
@@ -46,10 +47,11 @@ module DFStock
     def caste ; raw.caste[caste_index] end
 
     # def token ; "#{caste.caste_name.first}" end # 'toad *woman*' leather. Which caste is the default?
-    def token ; raw.name.first end
-    def to_s ; "#{super} creature_index=#{creature_index}" end
+    def token ; title_case raw.name[1] end
+    def to_s ; super + " creature_index=#{creature_index}" end
 
     attr_reader :creature_index
+    alias index creature_index
     def initialize index, link: nil, caste: nil
       @creature_index = index
       @caste_index = caste
@@ -57,7 +59,7 @@ module DFStock
     end
   end
 
-  class Animal < Creature
+  class Animal < Creature # For the 'Animals' category
     def self.animal_indexes ; cache(:animals) { creatures.each_with_index.inject([]) {|a,(c,i)| a << i if c.is_stockpile_animal? ; a } } end
     def self.animals ; animal_indexes.each_index.map {|i| Animal.new i } end
     # def self.index_translation ; animal_indexes end
@@ -68,6 +70,7 @@ module DFStock
     def token ; n = raw.name[1] ; n =~ /[A-Z]/ ? n : n.capitalize end # Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
 
     attr_reader :animal_index
+    alias index animal_index
     def initialize index, link: nil
       @animal_index = index
       super creature_index, link: link
@@ -89,15 +92,17 @@ module DFStock
     def material ; material_info.material end
     def raw ; material_info.mode == :Creature ? material_info.creature : material_info.plant end # NOTE: Not all meats are from animals.
     def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
-    def to_s ; "#{super} @meat_index=#{index}" end
+    def to_s ; super + " meat_index=#{index}" end
 
     attr_reader :meat_index
+    alias index meat_index
     def initialize index, link: nil
       @meat_index = index
       super
     end
   end
 
+  # Note that fish alternate male/female but Creatures are singular with a 'caste' flag for sex.
   class Fish < Creature
     def self.fish_category ; organic_category :Fish end
     def self.fish_types ; organic_types[fish_category] end
@@ -113,9 +118,10 @@ module DFStock
     def creature_index ; self.class.find_creature_index self.class.fish_raws[fish_index] end
     def caste_index ; mat_type end
     def token ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
-    def to_s ; "#{super} fish_index=#{fish_index}" end
+    def to_s ; super + " fish_index=#{fish_index}" end
 
     attr_reader :fish_index
+    alias index fish_index
     def initialize index, link: nil
       @fish_index = index
       super
@@ -137,9 +143,10 @@ module DFStock
     def creature_index ; self.class.find_creature_index self.class.unpreparedfish_raws[unpreparedfish_index] end
     def caste_index ; mat_type end
     def token ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
-    def to_s ; "#{super} unpreparedfish_index=#{unpreparedfish_index}" end
+    def to_s ; super + " unpreparedfish_index=#{unpreparedfish_index}" end
 
     attr_reader :unpreparedfish_index
+    alias index unpreparedfish_index
     def initialize index, link: nil
       @unpreparedfish_index = index
       super
@@ -155,6 +162,7 @@ module DFStock
     # def self.index_translation ; egg_indexes end
 
     def creature_index ; self.class.egg_types[egg_index].first end
+    def    caste_index ; self.class.egg_types[egg_index].last end
     def materials ; raw.material.select {|m| m.id =~ /EGG/ } end
     def material ; materials.find {|m| m.id =~ /YOLK/ } end
 
@@ -162,10 +170,11 @@ module DFStock
     def to_s ; super + " egg_index=#{egg_index}" end
 
     attr_reader :egg_index
-    def index ; egg_index end
+    alias index egg_index
+    alias link_index index
     def initialize index, link: nil
       @egg_index = index
-      super creature_index, link: link # Passthrough
+      super creature_index, caste: caste_index, link: link # Passthrough
       @index = egg_index
     end
   end
@@ -186,6 +195,7 @@ module DFStock
     def to_s ; super + " creaturedrink_index=#{creaturedrink_index}" end
 
     attr_reader :creaturedrink_index
+    alias index creaturedrink_index
     def initialize index, link: nil
       @creaturedrink_index = index
       super
@@ -204,13 +214,16 @@ module DFStock
     def material ; material_info.material end
     def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.creature end
-    def token ; "#{material.state_name[:Solid]}" end
+    def creature_index ; self.class.find_creature_index raw end
+    def token ; title_case "#{material.state_name[:Solid]}" end
     def to_s ; super + " creaturecheese_index=#{creaturecheese_index}" end
 
     attr_reader :creaturecheese_index
+    alias index creaturecheese_index
+    alias link_index index
     def initialize index, link: nil
       @creaturecheese_index = index
-      super
+      super creature_index, link: link
     end
   end
 
@@ -230,6 +243,7 @@ module DFStock
     def to_s ; super + " creaturepowder_index=#{creaturepowder_index}" end
 
     attr_reader :creaturepowder_index
+    alias index creaturepowder_index
     def initialize index, link: nil
       @creaturepowder_index = index
       super
@@ -254,6 +268,7 @@ module DFStock
     def to_s ; super + " silk_index=#{silk_index}" end
 
     attr_reader :silk_index
+    alias index silk_index
     def initialize index, link: nil
       @silk_index = index
       super
@@ -277,6 +292,7 @@ module DFStock
     def to_s ; super + " yarn_index=#{yarn_index}" end
 
     attr_reader :yarn_index
+    alias index yarn_index
     def initialize index, link: nil
       @yarn_index = index
       super
@@ -300,6 +316,7 @@ module DFStock
     def to_s ; super + " metalthread_index=#{metalthread_index}" end
 
     attr_reader :metalthread_index
+    alias index metalthread_index
     def initialize index, link: nil
       @metalthread_index = index
       super
@@ -322,6 +339,7 @@ module DFStock
     def to_s ; super + " fat_index=#{fat_index}" end
 
     attr_reader :fat_index
+    alias index fat_index
     def initialize index, link: nil
       @fat_index = index
       super
@@ -344,6 +362,7 @@ module DFStock
     def to_s ; super + " creatureextract_index=#{creatureextract_index}" end
 
     attr_reader :creatureextract_index
+    alias index creatureextract_index
     def initialize index, link: nil
       @creatureextract_index = index
       super
@@ -366,6 +385,7 @@ module DFStock
     def to_s ; super + " leather_index=#{leather_index}" end
 
     attr_reader :leather_index
+    alias index leather_index
     def initialize index, link: nil
       @leather_index = index
       super
@@ -387,6 +407,7 @@ module DFStock
     def to_s ; super + " parchment_index=#{parchment_index}" end
 
     attr_reader :parchment_index
+    alias index parchment_index
     def initialize index, link: nil
       @parchment_index = index
       super

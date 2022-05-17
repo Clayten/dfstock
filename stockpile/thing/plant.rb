@@ -56,10 +56,11 @@ module DFStock
     def self.find_plant_index raw ; plant_raws.index raw end
 
     def raw ; self.class.plant_raws[plant_index] end
-    def token ; raw.name end
+    def token ; title_case raw.name end
     def to_s ; super + " plant_index=#{plant_index}" end
 
     attr_reader :plant_index
+    alias index plant_index
     def initialize index, link: nil
       @plant_index = index
       super
@@ -71,7 +72,7 @@ module DFStock
     # def self.plantproduct_types ; organic_types[plantproduct_category] end
     def self.plantproduct_types ; cache(:plantproducts) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.crop? ; a } } end
     def self.plantproduct_material_infos ; plantproduct_types.map {|(c,i)| material_info c, i } end
-    def self.plantproduct_indexes ; (0 ... plantproduct_types.length).to_a end
+    def self.plantproduct_indexes ; plantproduct_types end
     def self.plantproducts ; plantproduct_indexes.each_index.map {|i| PlantProduct.new i } end
     # def self.index_translation ; plantproduct_indexes end
 
@@ -81,6 +82,7 @@ module DFStock
     def token ; title_case super end
 
     attr_reader :plantproduct_index
+    alias index plantproduct_index
     def initialize index, link: nil
       @plantproduct_index = index
       super plant_index, link: link
@@ -98,15 +100,18 @@ module DFStock
     def material_info ; self.class.plantdrink_material_infos[plantdrink_index] end
     def material ; material_info.material end
     def materials ; [material] end
+    def plant_index ; self.class.plantdrink_types[plantdrink_index].last end
     # def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.plant end
     def token ; title_case "#{material.state_name[:Liquid]}" end
     def to_s ; super + " plantdrink_index=#{plantdrink_index}" end
 
     attr_reader :plantdrink_index
+    alias index plantdrink_index
+    alias link_index index
     def initialize index, link: nil
       @plantdrink_index = index
-      super
+      super plant_index, link: link
     end
   end
 
@@ -126,6 +131,7 @@ module DFStock
     def to_s ; super + " plantcheese_index=#{plantcheese_index}" end
 
     attr_reader :plantcheese_index
+    alias index plantcheese_index
     def initialize index, link: nil
       @plantcheese_index = index
       super
@@ -143,6 +149,7 @@ module DFStock
     def to_s ; super + " plantpowder_index=#{plantpowder_index}" end
 
     attr_reader :plantpowder_index
+    alias index plantpowder_index
     def initialize index, link: nil
       @plantpowder_index = index
       super
@@ -167,7 +174,9 @@ module DFStock
     def materials ; [material] end
     def growth ; growths.find {|g| g.str_growth_item.include? material.id } end # This plant might have two or more growths - find the correct one
     def token ; title_case "#{growth.name}" end
+
     attr_reader :fruitleaf_index
+    alias index fruitleaf_index
     def initialize index, link: nil
       @fruitleaf_index = index
       super
@@ -176,18 +185,21 @@ module DFStock
 
   # NOTE: Index is seed_index, not a sparse index into plants
   class Seed < Plant
+    def self.seed_category ; organic_category :Seed end
+    def self.seed_types ; organic_types[seed_category] end
+    def self.seed_material_infos ; seed_types.map {|(t,i)| material_info t, i } end
     def self.seed_indexes ; cache(:seeds) { plants.each_with_index.inject([]) {|a,(t,i)| a << i if t.seed? ; a } } end
-    def self.seeds ; seed_indexes.each_index.map {|i| Seed.new i } end
-    # def self.index_translation ; seed_indexes end
 
-    def material ; mat_seed end
+    def material_info ; self.class.seed_material_infos[seed_index] end
+    def material ; material_info.material end
     def plant_index ; self.class.seed_indexes[seed_index] end
-    def index ; seed_index end
     def to_s ; super + " seed_index=#{seed_index}" end
 
     def token ; title_case raw.seed_plural end
 
     attr_reader :seed_index
+    alias index seed_index
+    alias link_index index
     def initialize index, link: nil
       @seed_index = index
       super self.class.index_translation[index], link: link # Passthrough - different number than parent class
@@ -211,6 +223,7 @@ module DFStock
     def to_s ; super + " paste_index=#{paste_index}" end
 
     attr_reader :paste_index
+    alias index paste_index
     def initialize index, link: nil
       @paste_index = index
       super
@@ -235,6 +248,7 @@ module DFStock
     def to_s ; super + " plantfiber_index=#{plantfiber_index}" end
 
     attr_reader :plantfiber_index
+    alias index plantfiber_index
     def initialize index, link: nil
       @plantfiber_index = index
       super
@@ -265,6 +279,7 @@ module DFStock
     def to_s ; super + " paper_index=#{paper_index}" end
 
     attr_reader :paper_index
+    alias index paper_index
     def initialize index, link: nil
       @paper_index = index
       super
@@ -287,6 +302,7 @@ module DFStock
     def to_s ; super + " pressed_index=#{pressed_index}" end
 
     attr_reader :pressed_index
+    alias index pressed_index
     def initialize index, link: nil
       @pressed_index = index
       super
@@ -309,6 +325,7 @@ module DFStock
     def to_s ; super + " plantextract_index=#{plantextract_index}" end
 
     attr_reader :plantextract_index
+    alias index plantextract_index
     def initialize index, link: nil
       @plantextract_index = index
       super
@@ -337,6 +354,7 @@ module DFStock
     def token ; raw.name_plural end
 
     attr_reader :tree_index
+    alias index tree_index
     def initialize index, link: nil
       @tree_index = index
       super plant_index, link: link

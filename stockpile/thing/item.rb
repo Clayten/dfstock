@@ -26,6 +26,7 @@ module DFStock
     def token ; "#{"#{adjective} " if adjective}#{name_plural}" end
 
     attr_reader :item_index
+    alias index item_index
     def initialize index, link: nil
       @item_index = index
       super
@@ -44,6 +45,7 @@ module DFStock
     def to_s ; super + " ammo_index=#{ammo_index}" end
 
     attr_reader :ammo_index
+    alias index ammo_index
     def initialize index, link: nil
       @ammo_index = index
       super
@@ -62,6 +64,7 @@ module DFStock
     def to_s ; super + " weapon_index=#{weapon_index}" end
 
     attr_reader :weapon_index
+    alias index weapon_index
     def initialize index, link: nil
       @weapon_index = index
       super
@@ -79,6 +82,7 @@ module DFStock
     def to_s ; super + " trapweapon_index=#{trapweapon_index}" end
 
     attr_reader :trapweapon_index
+    alias index trapweapon_index
     def initialize index, link: nil
       @trapweapon_index = index
       super
@@ -96,6 +100,7 @@ module DFStock
     def to_s ; super + " armorbody_index=#{armorbody_index}" end
 
     attr_reader :armorbody_index
+    alias index armorbody_index
     def initialize index, link: nil
       @armorbody_index = index
       super
@@ -113,6 +118,7 @@ module DFStock
     def to_s ; super + " armorhead_index=#{armorhead_index}" end
 
     attr_reader :armorhead_index
+    alias index armorhead_index
     def initialize index, link: nil
       @armorhead_index = index
       super
@@ -130,6 +136,7 @@ module DFStock
     def to_s ; super + " armorfeet_index=#{armorfeet_index}" end
 
     attr_reader :armorfeet_index
+    alias index armorfeet_index
     def initialize index, link: nil
       @armorfeet_index = index
       super
@@ -147,6 +154,7 @@ module DFStock
     def to_s ; super + " armorhand_index=#{armorhand_index}" end
 
     attr_reader :armorhand_index
+    alias index armorhand_index
     def initialize index, link: nil
       @armorhand_index = index
       super
@@ -164,6 +172,7 @@ module DFStock
     def to_s ; super + " armorleg_index=#{armorleg_index}" end
 
     attr_reader :armorleg_index
+    alias index armorleg_index
     def initialize index, link: nil
       @armorleg_index = index
       super
@@ -181,6 +190,7 @@ module DFStock
     def to_s ; super + " armorshield_index=#{armorshield_index}" end
 
     attr_reader :armorshield_index
+    alias index armorshield_index
     def initialize index, link: nil
       @armorshield_index = index
       super

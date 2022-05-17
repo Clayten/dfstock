@@ -12,7 +12,7 @@ module DFStock
     def self.builtins ; builtin_indexes.each_index.map {|i| Builtin.new i } end
     # def self.index_translation ; builtin_indexes end
 
-    def index ; self.class.builtin_indexes[builtin_index] end
+    # def index ; self.class.builtin_indexes[builtin_index] end
     def material ; self.class.builtin_materials[index] end
     def materials ; [material] end
 
@@ -20,6 +20,7 @@ module DFStock
     def token ; material.state_name[:Solid] end
 
     attr_reader :builtin_index
+    alias index builtin_index
     def initialize index, link: nil
       @builtin_index = index
       super
@@ -35,6 +36,7 @@ module DFStock
     def to_s ; super + " glass_index=#{glass_index}" end
 
     attr_reader :glass_index
+    alias index glass_index
     def initialize index, link: nil
       @glass_index = index
       super builtin_index, link: link

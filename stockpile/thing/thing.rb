@@ -21,7 +21,7 @@ module DFStock
       active_flags(ms || materials)
     end
     def raw_flags
-      has_raw? ?  active_flags([raw.flags]) : {}
+      has_raw? ?  active_flags([raw]) : {}
     end
   end
 
@@ -82,10 +82,10 @@ module DFStock
     def check_index
       raise "No linked array" unless link
       raise "Linked array is empty - did you enable the category?" if link.empty?
-      raise "Index #{index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === index
+      raise "Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
     end
-    def set x ; check_index ; link[index] = !!x end
-    def get   ; check_index ; link[index] end
+    def set x ; check_index ; link[link_index] = !!x end
+    def get   ; check_index ; link[link_index] end
     def  enabled? ; !!get end
     def  enable   ; set true end
     def disable   ; set false end
@@ -133,7 +133,7 @@ module DFStock
     def self.inspect_cache ; internal_cache end
 
     def token ; 'NONE' end
-    def to_s ; "#{self.class.name} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} token=#{token.inspect} index=#{index}" end
+    def to_s ; "#{self.class.name} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} token=#{token.inspect}" end
     def inspect ; "#<#{to_s}>" rescue super end
 
     def link ; @link end
@@ -148,12 +148,13 @@ module DFStock
 
     def == o ; self.class == o.class && index == o.index end
 
-    attr_reader :index
+    attr_reader :base_index
+    alias link_index base_index # override if necessary
     def initialize index, link: nil
       raise "You can't instantiate the base class" if self.class == Thing
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
-      @index = index # The index into the 'link'ed array for the thing
+      @base_index = index
       @link  = link
     end
   end

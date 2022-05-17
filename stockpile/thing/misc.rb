@@ -14,6 +14,7 @@ module DFStock
     def to_s ; super + " furniture_index=#{furniture_index}" end
 
     attr_reader :furniture_index
+    alias index furniture_index
     def initialize index, link: nil
       @furniture_index = index
       super
@@ -32,6 +33,7 @@ module DFStock
     def to_s ; super + " miscliquid_index=#{miscliquid_index}" end
 
     attr_reader :miscliquid_index
+    alias index miscliquid_index
     def initialize index, link: nil
       @miscliquid_index = index
       super
@@ -48,6 +50,7 @@ module DFStock
     def to_s ; super + " ammoothermaterial_index=#{ammoothermaterial_index}" end
 
     attr_reader :ammoothermaterial_index
+    alias index ammoothermaterial_index
     def initialize index, link: nil
       @ammoothermaterial_index = index
       super
@@ -75,6 +78,7 @@ module DFStock
     def to_s ; super + " barothermaterial_index=#{barothermaterial_index}" end
 
     attr_reader :barothermaterial_index
+    alias index barothermaterial_index
     def initialize index, link: nil
       @barothermaterial_index = index
       super
@@ -91,6 +95,7 @@ module DFStock
     def to_s ; super + " blockothermaterial_index=#{blockothermaterial_index}" end
 
     attr_reader :blockothermaterial_index
+    alias index blockothermaterial_index
     def initialize index, link: nil
       @blockothermaterial_index = index
       super
@@ -107,6 +112,7 @@ module DFStock
     def to_s ; super + " weaponothermaterial_index=#{weaponothermaterial_index}" end
 
     attr_reader :weaponothermaterial_index
+    alias index weaponothermaterial_index
     def initialize index, link: nil
       @weaponothermaterial_index = index
       super
@@ -124,6 +130,7 @@ module DFStock
     def to_s ; super + " furnitureothermaterial_index=#{furnitureothermaterial_index}" end
 
     attr_reader :furnitureothermaterial_index
+    alias index furnitureothermaterial_index
     def initialize index, link: nil
       @furnitureothermaterial_index = index
       super
@@ -141,6 +148,7 @@ module DFStock
     def to_s ; super + " finishedgoodsothermaterial_index=#{finishedgoodsothermaterial_index}" end
 
     attr_reader :finishedgoodsothermaterial_index
+    alias index finishedgoodsothermaterial_index
     def initialize index, link: nil
       @finishedgoodsothermaterial_index = index
       super
@@ -156,11 +164,12 @@ module DFStock
     def self.finishedgoods ; (0 ... finishedgood_indexes.length).map {|i| FinishedGood.new i } end
     # def self.index_translation ; finishedgood_indexes end
 
-    def index ; self.class.finishedgood_indexes[finishedgood_index] end
+    # def index ; self.class.finishedgood_indexes[finishedgood_index] end
     def token ; self.class.finishedgood_items[finishedgood_index] end
     def to_s ; super + " finishedgood_index=#{finishedgood_index}" end
 
     attr_reader :finishedgood_index
+    alias index finishedgood_index
     def initialize index, link: nil
       @finishedgood_index = index
       super self.index, link: link
@@ -178,6 +187,7 @@ module DFStock
     def to_s ; super + " refuse_index=#{refuse_index}" end
 
     attr_reader :refuse_index
+    alias index refuse_index
     def initialize index, link: nil
       @refuse_index = index
       super
@@ -192,9 +202,10 @@ module DFStock
 
     def quality ; self.class.quality_levels[quality_index] end
     def token ; quality.to_s end
-    def to_s ; "#{super} @quality_index=#{quality_index}" end
+    def to_s ; super + " quality_index=#{quality_index}" end
 
     attr_reader :quality_index
+    alias index quality_index
     def initialize index, link: nil
       # raise "#{self.class} number #{index} doesn't exist." unless index > 0 and index <= quality_indexes.length
       @quality_index = index
