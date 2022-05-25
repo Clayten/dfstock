@@ -160,15 +160,21 @@ module DFStock
   end
 
   # # Template
-  # class X < Thing
-  #   def self.X_indexes ; (0 ... ??.length).to_a end
-  #   def self.index_translation ; X_indexes end # Scaffolded automatically, if your classname matches X from X_indexes
-  #   def Y_index ; self.class.X_indexes[X_index] end
-  #   def to_s ; super + " X_index=#{X_index}" end
-  #   attr_reader :X_index
+  # class X < Thing ; end
+  # class Y < X
+  #   def self.Y_indexes ; (0 ... ??.length).to_a end
+  #   def self.index_translation ; Y_indexes end # Scaffolded automatically, if your classname matches Y from Y_indexes
+  #
+  #   def x_index ; self.class.Y_indexes[Y_index] end
+  #   def token ; title_case "xyz" end # Varies by class
+  #   def to_s ; super + " Y_index=#{Y_index}" end
+  #
+  #   attr_reader :y_index
+  #   alias index y_index
+  #   alias link_index index # If necessary
   #   def initialize index, link: nil
-  #     @X_index = index
-  #     super Y_index, link: link
+  #     @y_index = index
+  #     super x_index, link: link
   #   end
   # end
 
