@@ -145,11 +145,15 @@ module DFStock
     def self.plantpowder_indexes ; (0 ... plantpowder_types.length).to_a end
     def self.plantpowders ; plantpowder_indexes.each_index.map {|i| PlantPowder.new i } end
 
-    def plant_index ; self.class.plantpowder_indexes[plantpowder_index] end
+    def material_info ; self.class.plantpowder_material_infos[index] end
+    def material ; material_info.material end
+    def plant_index ; self.class.find_plant_index material_info.plant end
+    def token ; title_case material.state_name[:Powder] end
     def to_s ; super + " plantpowder_index=#{plantpowder_index}" end
 
     attr_reader :plantpowder_index
     alias index plantpowder_index
+    alias link_index index
     def initialize index, link: nil
       @plantpowder_index = index
       super

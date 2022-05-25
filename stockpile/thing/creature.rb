@@ -122,6 +122,7 @@ module DFStock
 
     attr_reader :fish_index
     alias index fish_index
+    alias link_index index
     def initialize index, link: nil
       @fish_index = index
       super
@@ -147,6 +148,7 @@ module DFStock
 
     attr_reader :unpreparedfish_index
     alias index unpreparedfish_index
+    alias link_index index
     def initialize index, link: nil
       @unpreparedfish_index = index
       super
@@ -191,7 +193,7 @@ module DFStock
     def material ; material_info.material end
     def material_flags ; material.flags end # Only look at this material
     def raw ; material_info.creature end
-    def token ; "#{material.state_name[:Liquid]}" end
+    def token ; title_case "#{material.state_name[:Liquid]}" end
     def to_s ; super + " creaturedrink_index=#{creaturedrink_index}" end
 
     attr_reader :creaturedrink_index

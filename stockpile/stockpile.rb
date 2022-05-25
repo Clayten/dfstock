@@ -403,6 +403,7 @@ if self.class.const_defined? :DFHack
     def all_items           ; settings.all_items end
   end
 
+
   class DFHack::HaulingStop
     include DFHack::StockForwarder
 
