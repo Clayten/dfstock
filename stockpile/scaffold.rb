@@ -8,7 +8,7 @@ module DFStock
     # similar to attr_accessor, add_array and add_flags, which define accessors to match the DF structures.
     #
     # This DFStock::TypeMod is then itself *included* into a DFHack::StockpileSettings_TType (eg _TArmor) *class*
-    # where it build and binds the accessor code created previously.
+    # where it build and binds the accessor methods listed previously with the helper methods.
 
     # This runs when Scaffold is *extended* into a DFStock:: *module* - it sets up the later parts
     def self.extended klass
@@ -19,25 +19,25 @@ module DFStock
     # This is called during class-definition at load-time
     def add_array stockklass, actual_name, desired_name = nil
       actual_name, desired_name = actual_name.to_sym, desired_name
-      array = [:array, actual_name, desired_name, stockklass]
-      # p [:add_array, self, :array, array]
+      feature = [:array, actual_name, desired_name, stockklass]
+      # p [:add_array, self, :feature, feature]
       @features.delete_if {|type, an, dn, sk| type == :array && actual_name == an && desired_name == dn && stockklass = sk }
-      @features.push(array)
+      @features.push(feature)
       actual_name
     end
 
     # This is called during class-definition at load-time
     def add_flag actual_name, desired_name = nil
-      flag = [:flag, actual_name, desired_name]
-      # p [:add_flag, self, :flag, flag]
+      feature = [:flag, actual_name, desired_name]
+      # p [:add_flag, self, :feature, feature]
       @features.delete_if {|type, an, dn, _| type == :flag && actual_name == an && desired_name == dn }
-      @features.push(flag)
+      @features.push(feature)
       actual_name
     end
 
     # This runs when the DFStock *module* is *included* into a DFHack::StockpileSettings *class* - it creates the accessors
     #
-    # Note: Unlike "most" modules, the accessors aren't defined on the module, this act of inclusion
+    # Note: Unlike most modules, the accessors aren't defined on the module, this act of inclusion
     # triggers the manual creation of the accessors.
     def included klass
       # p [:included, :self, self, :into, klass, :features, @features.length, @features]
