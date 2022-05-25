@@ -6,7 +6,7 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module RawMaterials
-    def materials ; return [] unless respond_to? :raw ; r = raw rescue false ; return false unless r ; r.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
+    def materials ; return [] unless respond_to? :raw ; r = raw rescue false ; return [] unless r ; r.material.to_a end # NOTE: Redefine as appropriate in the base-class when redefining material.
     def material  ; materials.first if materials end
     def raws ; return false unless raw ; raw.raws.sort end
     def raw ; raise "#{self.class} does not have a raw definition" end
@@ -14,6 +14,7 @@ module DFStock
     def has_material? ; !!(material rescue nil) end
 
     def material_ids ; materials.map &:id end
+
     def active_flags ms ; ms = [*ms] ; Hash[ms.map(&:flags).inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
     def mfah ; materials.inject({}) {|h,m| h[m.id] = active_flags m ; h } end
     def material_flags ms = nil
@@ -21,7 +22,8 @@ module DFStock
       active_flags(ms || materials)
     end
     def raw_flags
-      has_raw? ?  active_flags([raw]) : {}
+      return {} unless has_raw?
+      active_flags([raw])
     end
   end
 
@@ -155,7 +157,7 @@ module DFStock
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
       @base_index = index
-      @link  = link
+      @link = link
     end
   end
 
