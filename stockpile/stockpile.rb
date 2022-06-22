@@ -30,8 +30,8 @@ module DFStock
     add_array(PlantCheese,      :cheese_plant)
     add_array(CreatureCheese,   :cheese_animal)
     add_array(Seed,             :seeds)
-    add_array(FruitLeaf,        :leaves, :fruitleaves)
-    add_array(PlantPowder,      :powder_plant)
+    add_array(FruitLeaf2,       :leaves, :fruitleaves)
+    add_array(PlantPowder2,     :powder_plant)
     add_array(CreaturePowder,   :powder_creature)
     add_array(Fat,              :glob, :glob_fat)
     add_array(Paste,            :glob_paste)
@@ -68,7 +68,7 @@ module DFStock
 
   module StoneMod
     extend Scaffold
-    add_array(Ore,           :mats, :ore)
+    add_array(Ore2,           :mats, :ore)
     add_array(EconomicStone, :mats, :economic)
     add_array(OtherStone,    :mats, :other)
     add_array(Clay,          :mats, :clay)
