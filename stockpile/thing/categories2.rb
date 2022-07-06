@@ -59,33 +59,57 @@ module DFStock
       p [:inorganic_subset, :self, self, :name, selfclassname, :parentname, parentclassname, :meta, metaclass]
 
       p [:meta_define_method, :_raws]
-      metaclass.define_method("#{selfclassname}_raws") {
-        p [selfclassname, :_raws, :parent, parentclassname, "#{parentclassname}_instance", caller.length]
-        # cache([:raws, selfclassname]) {
-          send("#{parentclassname}_instances").select {|i|
-            discriminator[i]
-          }.map(&:raw)
-        # }
-      }
+      # metaclass.define_method("#{selfclassname}_raws") {
+      #   p [selfclassname, :_raws, :parent, parentclassname, "#{parentclassname}_instance", caller.length]
+      #   # cache([:raws, selfclassname]) {
+      #     send("#{parentclassname}_instances").select {|i|
+      #       discriminator[i]
+      #     }.map(&:raw)
+      #   # }
+      # }
+
+      metaclass.define_method("#{selfclassname}_discriminator") { discriminator }
+      metaclass.class_eval(<<~S_RAWS, __FILE__, __LINE__)
+        def #{selfclassname}_raws
+          #{parentclassname}_instances.select {|i| #{selfclassname}_discriminator[i] }.map(&:raw)
+        end
+      S_RAWS
 
       p [:meta_define_method, :_instances]
-      metaclass.define_method("#{selfclassname}_instances") {
-        p [selfclassname, :_instances, :parent, parentclassname, caller.length]
-        send("#{selfclassname}_raws").each_with_index.map {|_,i| new i }
-      }
+      # metaclass.define_method("#{selfclassname}_instances") {
+      #   p [selfclassname, :_instances, :parent, parentclassname, caller.length]
+      #   send("#{selfclassname}_raws").each_with_index.map {|_,i| new i }
+      # }
+      metaclass.class_eval(<<~S_INST, __FILE__, __LINE__)
+        def #{selfclassname}_instances
+          #{selfclassname}_raws.length.times.map {|i| new i }
+        end
+      S_INST
 
-      metaclass.define_method("instances") { p [:instances, :self, selfclassname] ; send("#{selfclassname}_instances") }
+      # metaclass.define_method("instances") { p [:instances, :self, selfclassname] ; send("#{selfclassname}_instances") }
+      metaclass.class_eval(<<~INST, __FILE__, __LINE__)
+        def instances ; #{selfclassname}_instances end
+      INST
 
-      metaclass.define_method("index_translation") { (0...send("#{selfclassname}_infos").length).to_a } # FIXME Can this be replaced with an int?
+      # metaclass.define_method("index_translation") { (0...send("#{selfclassname}_infos").length).to_a } # FIXME Can this be replaced with an int?
+      metaclass.class_eval(<<~IDX_T, __FILE__, __LINE__)
+        def index_translation ; (0...#{selfclassname}_raws.length).to_a end
+      IDX_T
 
       # Create a hook to find an instance's index based on its raw, for child-classes to link through
-      define_method("#{selfclassname}_by_raw") {|raw| self.class.send("#{selfclassname}_raws").index raw }
+      # define_method("#{selfclassname}_by_raw") {|raw| self.class.send("#{selfclassname}_raws").index raw }
+      class_eval(<<~BY_RAW, __FILE__, __LINE__)
+        def #{selfclassname}_by_raw ; #{selfclassname}_raws.index raw end
+      BY_RAW
 
       # Using the Parent.parent_by_raw method, if it exists, to provide the Self.parent_index method
       if parentclass.instance_methods.include?("#{parentclassname}_by_raw".to_sym)
-        define_method("#{parentclassname}_index") {
-          send "#{parentclassname}_by_raw", raw
-        }
+        # define_method("#{parentclassname}_index") {
+        #   send "#{parentclassname}_by_raw", raw
+        # }
+        class_eval(<<~P_IDX, __FILE__, __LINE__)
+          def #{parentclassname}_index ; #{parentclassname}_by_raw raw end
+        P_IDX
       end
     end
   end

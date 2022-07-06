@@ -45,7 +45,6 @@ module DFStock
       subclass.class_eval(<<~INIT, __FILE__, __LINE__)
         def initialize index, link: nil
           @#{subclass_ivar} = index
-          receiver
           super #{parent_index}, link: link
         end
 INIT
@@ -73,7 +72,7 @@ INIT
         #   send subclass_index
         # }
         subclass.class_eval(<<~P_INDEX, __FILE__, __LINE__)
-          def #{parentclassname_index} ; #{subclass_index} end
+          def #{parentclassname}_index ; #{subclass_index} end
         P_INDEX
       end
     end
