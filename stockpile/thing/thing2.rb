@@ -33,48 +33,25 @@ module DFStock
       parentclassname = format_classname parentclass subclass
       subclass_index  = "#{subclassname}_index"
         parent_index  = "#{parentclassname}_index"
-      subclass_ivar   = '@' + subclass_index
 
-      # p [:inherited, :scaffold_initialize, :sc, subclassname, :pc, parentclassname, :sc_i, subclass_index, :p_i, parent_index, :sc_iv, subclass_ivar]
-#       subclass.define_method(:initialize) {|index, link: nil|
-#         instance_variable_set subclass_ivar, index
-#         # p [:initialize1, :self, self.class, :level, subclassname, :sciv, subclass_ivar, :index, index, :parent, parentclassname]
-#         # p [:initialize2, :parent, parentclassname, parent_index, send(parent_index), :link?, !!link]
-#         super send(parent_index), link: link
-#       }
-      subclass.class_eval(<<~INIT, __FILE__, __LINE__)
+      subclass.class_eval(<<~TXT, __FILE__, __LINE__)
         def initialize index, link: nil
-          @#{subclass_ivar} = index
+          @#{subclass_index} = index
           super #{parent_index}, link: link
         end
-INIT
 
-      # Define the accessor and the alias
-      # subclass.define_method(subclass_index) { instance_variable_get subclass_ivar }
-      subclass.class_eval(<<~IVAR, __FILE__, __LINE__)
+        # Define the accessor and the alias
         attr_reader :#{subclass_index}
-      IVAR
+        alias index #{subclass_index}
 
-      # subclass.define_method(        :index) { send                  subclass_index } # this gets overwritten in each child class
-      subclass.class_eval(<<~INDEX, __FILE__, __LINE__)
-        def index ; #{subclass_index} end
-      INDEX
+        # Add to the description
+        def to_s ; super + " #{subclass_index}=" + #{subclass_index}.to_s end
+      TXT
 
-      # subclass.define_method(:to_s) { super() + " #{subclass_index}=#{send subclass_index}" }
-      subclass.class_eval(<<~TO_S, __FILE__, __LINE__)
-        def to_s ; super + " #{subclass_index}=" + #{subclass_index} end
-      TO_S
-
-      # Thing doesn't modify the index, it uses whatever its direct child uses
-      # Direct descendants don't need to specify a parent linkage because of this method
-      if parentclassname == 'thing2'
-        # subclass.define_method("#{parentclassname}_index") {
-        #   send subclass_index
-        # }
-        subclass.class_eval(<<~P_INDEX, __FILE__, __LINE__)
-          def #{parentclassname}_index ; #{subclass_index} end
-        P_INDEX
-      end
+      # Override the normal 'parent_index' method when Thing2 is your parent and just use your own index
+      subclass.class_eval(<<~TXT, __FILE__, __LINE__) if parentclassname == 'thing2'
+        def #{parentclassname}_index ; #{subclass_index} end
+      TXT
     end
 
     # Caching
@@ -115,7 +92,7 @@ INIT
 
     attr_accessor :link_index # alias a later index over this to change what array is indexed into
     def initialize index, link: nil
-      # p [:initialize_thing, :klass, self.class, :index, index, :link, !!link]
+      p [:initialize_thing, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing2
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
@@ -141,5 +118,5 @@ def ccache ks = nil
   # p [:ks, ks]
   ks.each {|k| k.clear_cache }
 end
-def try &b ; r = wrap &b ; puts(r.backtrace[0..10],'...',r.backtrace[-10..-1]) if r.is_a?(Exception) ; r end
+def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
 def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
