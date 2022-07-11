@@ -21,16 +21,21 @@ module DFStock
     inorganic_subset {|x| x.is_metal? }
   end
 
+  class MetalThread2 < Metal2
+    inorganic_subset {|x| x.material.flags[:STOCKPILE_THREAD_METAL] }
+  end
+
+  class CutStone2 < Inorganic2
+    inorganic_subset(&:is_stone?)
+  end
+
   class Stone2 < Inorganic2
-    inorganic_subset {|x| x.is_stone? }
+    # The .is_stone? flag does not correspond to stock-category stones.
+    inorganic_subset {|x| x.is_ore? || x.is_clay? || x.is_economic_stone? || x.is_other_stone? }
   end
 
   class Ore2 < Stone2
     inorganic_subset {|x| x.is_ore? }
-  end
-
-  class Clay2 < Inorganic2
-    inorganic_subset {|x| x.is_clay? }
   end
 
   class EconomicStone2 < Stone2
@@ -45,5 +50,8 @@ module DFStock
     def token ; super.downcase end
   end
 
-end
+  class Clay2 < Stone2
+    inorganic_subset {|x| x.is_clay? }
+  end
 
+end

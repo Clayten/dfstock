@@ -56,17 +56,32 @@ module DFStock
       selfclassname   = format_classname
       metaclass = (class << self ; self ; end)
 
-      p [:inorganic_subset, :self, self, :name, selfclassname, :parentname, parentclassname, :meta, metaclass]
+      # p :_
+      # p [:inorganic_subset, :self, self, :name, selfclassname, :parentname, parentclassname, :meta, metaclass]
 
       # Save the discriminator block as a closure
       metaclass.define_method("#{selfclassname}_discriminator") { discriminator }
 
-      metaclass.class_eval(<<~TXT, __FILE__, __LINE__)
-        def #{selfclassname}_raws
-          #{parentclassname}_instances.select {|i| #{selfclassname}_discriminator[i] }.map(&:raw)
+      metaclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
+        def #{selfclassname}_indexes
+          cache([:indexes, :#{selfclassname}]) {
+            #{parentclassname}_instances.each_with_index.select {|x,i| #{selfclassname}_discriminator[x] }.map(&:last)
+          }
         end
 
-        def #{selfclassname}_instances ; #{selfclassname}_raws.length.times.map {|i| new i } end
+        def #{selfclassname}_raws
+          # p [:#{selfclassname}_raws, self, self.class]
+          cache([:raws, :#{selfclassname}]) {
+            #{selfclassname}_indexes.map {|i| #{parentclassname}_instances[i].raw }
+          }
+        end
+
+        def #{selfclassname}_instances
+          # p [:#{selfclassname},:_instances,self, :prnt, self.parentclass]
+          cache([:instances, :#{selfclassname}]) {
+            #{selfclassname}_raws.length.times.map {|i| #{self.to_s}.new i }
+          }
+        end
         alias instances #{selfclassname}_instances
 
         # FIXME - replace with something that returns just .self_raws.length
@@ -74,13 +89,14 @@ module DFStock
       TXT
 
       # Create a hook to find an index based on a raw, for child-classes to link through
-      class_eval(<<~TXT, __FILE__, __LINE__)
-        def #{selfclassname}_by_raw ; #{selfclassname}_raws.index raw end
+      metaclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
+        def #{selfclassname}_by_raw raw ; #{selfclassname}_raws.index raw end
       TXT
 
       # Using the Parent.parent_by_raw method, if it exists, to provide the parent_index method
-      class_eval(<<~TXT, __FILE__, __LINE__) if parentclass.instance_methods.include?("#{parentclassname}_by_raw".to_sym)
-        def #{parentclassname}_index ; #{parentclassname}_by_raw raw end
+      class_eval(<<~TXT, __FILE__, __LINE__ + 1) if parentclass.methods.include?("#{parentclassname}_by_raw".to_sym)
+        # p [:creating_parent_index_instance_method, selfclassname, parentclassname]
+        def #{parentclassname}_index ; self.class.#{parentclassname}_by_raw raw end
       TXT
     end
   end

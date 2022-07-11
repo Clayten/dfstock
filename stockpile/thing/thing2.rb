@@ -27,15 +27,23 @@ module DFStock
 
     # Only called once, at initial class definition - before anonymous class is assigned a name from its constant
     def self.inherited subclass
-      # p [:inherited, subclass, :from, self, subclass.ancestors]
       raise "Improper inheritence" unless subclass < self
       subclassname    = format_classname subclass
       parentclassname = format_classname parentclass subclass
       subclass_index  = "#{subclassname}_index"
         parent_index  = "#{parentclassname}_index"
 
-      subclass.class_eval(<<~TXT, __FILE__, __LINE__)
+      # p :_
+      # p [:inh1, subclass.ancestors]
+      # p [:inh2, parentclasses(subclass)]
+
+      # p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
+
+      raise "This method uses the classname to scaffold accessors and can't be used by unnamed classes: #{subclassname}" if subclassname =~ /:/
+
+      subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
         def initialize index, link: nil
+          # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, index, :link, !!link]
           @#{subclass_index} = index
           super #{parent_index}, link: link
         end
@@ -49,7 +57,8 @@ module DFStock
       TXT
 
       # Override the normal 'parent_index' method when Thing2 is your parent and just use your own index
-      subclass.class_eval(<<~TXT, __FILE__, __LINE__) if parentclassname == 'thing2'
+      subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1) if parentclassname == 'thing2'
+        # p [:aliasing, :#{parentclassname}_index, :on, :#{subclassname}, :to, :#{subclassname}_index]
         def #{parentclassname}_index ; #{subclass_index} end
       TXT
     end
@@ -84,6 +93,12 @@ module DFStock
     def disable   ; set false end
     def  toggle   ; set !enabled? end
 
+    def self.[] n
+      n = n.source if n.respond_to? :source
+      t = Regexp.new n, Regexp::IGNORECASE
+      instances.select {|i| i.token =~ t }
+    end
+
     # Base methods
     def token ; 'NONE' end
 
@@ -92,7 +107,7 @@ module DFStock
 
     attr_accessor :link_index # alias a later index over this to change what array is indexed into
     def initialize index, link: nil
-      p [:initialize_thing, :klass, self.class, :index, index, :link, !!link]
+      # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing2
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
@@ -105,7 +120,7 @@ end
 
 # FIXME - for rerunning inheritance during testing
 def reinherit ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing2 }.sort {|a,b| a <=> b || 0 }.reverse
+  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing2 }.sort_by {|k| k.ancestors.length }
   # p [:ks, ks]
   ks.each {|k|
     kp = k.ancestors[1]

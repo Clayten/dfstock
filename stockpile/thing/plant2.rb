@@ -1,6 +1,8 @@
 require 'thing2'
 
 module DFStock
+  class Creature2 < Thing2
+  end
 
   class Plant2 < Thing2
     organic_category :Plants
