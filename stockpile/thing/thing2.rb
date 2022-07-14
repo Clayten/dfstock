@@ -16,9 +16,11 @@ module DFStock
     # Category Definitions
     extend   OrganicCategory
     extend InorganicCategory
+    extend  CreatureCategory
     # Scaffolds
     extend   OrganicScaffold
     extend InorganicScaffold
+    extend  GenericScaffold
 
     def self.format_classname x = nil ; (x || self).to_s.split('::').last.downcase end
     def self.parentclasses    x = nil ; c = x || self ; c.ancestors.select {|x| x.is_a? Class }.select {|x| x.name =~ /DFStock/ } end
@@ -33,20 +35,26 @@ module DFStock
       subclass_index  = "#{subclassname}_index"
         parent_index  = "#{parentclassname}_index"
 
-      # p :_
+      p :_
       # p [:inh1, subclass.ancestors]
       # p [:inh2, parentclasses(subclass)]
 
-      # p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
+      p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
 
       raise "This method uses the classname to scaffold accessors and can't be used by unnamed classes: #{subclassname}" if subclassname =~ /:/
 
       subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
-        def initialize index, link: nil
-          # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, index, :link, !!link]
-          @#{subclass_index} = index
-          super #{parent_index}, link: link
+        def initialize idx, link: nil, **a
+          p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :link, !!link]
+          @#{subclass_index} = idx
+          prnt_index = ('#{parentclassname}' == 'thing2') ? idx : prnt_index = self.class.#{subclassname}_indexes[idx]
+          p [:parent_index, idx, :#{subclassname}_indexes, self.class.#{subclassname}_indexes[idx], prnt_index]
+          # super #{parent_index}, link: link
+          super prnt_index, link: link
         end
+
+        def self.#{subclassname}_num_instances ; (respond_to?(#{subclassname}_raws) ? #{subclassname}_raws : #{subclassname}_types).length end
+        def self.#{subclassname}_instances ; #{subclassname}_num_instances.times.map {|i| p [:#{subclassname}_instances, i] ; new i } end
 
         # Define the accessor and the alias
         attr_reader :#{subclass_index}
@@ -107,7 +115,7 @@ module DFStock
 
     attr_accessor :link_index # alias a later index over this to change what array is indexed into
     def initialize index, link: nil
-      # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
+      p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing2
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0

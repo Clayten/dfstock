@@ -81,4 +81,41 @@ module DFStock
       TXT
     end
   end
+
+  module CreatureCategory
+    def raws_creature ; df.world.raws.creatures.all end
+  end
+
+  module GenericScaffold
+    def from_category cat
+      pcn = format_classname parentclass
+      scn = format_classname
+      mc = (class << self ; self ; end)
+
+      # p :_
+      p [:from_category, :self, self, :cat, cat, :name, scn, :parentname, pcn, :meta, mc]
+
+      mc.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
+        def #{scn}_category ; :#{cat} end
+        def #{scn}_types ; cache([:types, :#{scn}]) { organic_types(#{scn}_category) } end
+        def #{scn}_infos ; cache([:infos, :#{scn}]) { #{scn}_types.map {|t,i| material_info(t,i) } } end
+
+        def #{scn}_materials  ; cache([:materials, :#{scn}]) { #{scn}_infos.map {|x| x.material              } } end
+        def #{scn}_raws       ; cache([:raws,      :#{scn}]) { #{scn}_infos.map {|x| x.send(x.mode.downcase) } } end
+
+        def #{scn}_indexes
+          cache([:indexes, :#{scn}]) {
+            if respond_to?(:#{scn}_raws) ; #{scn}_raws.map      {|r| #{pcn}_raws.index      r }
+            else                         ; #{scn}_materials.map {|m| #{pcn}_materials.index m }
+            end
+          }
+        end
+
+        # def #{scn}_instances ; cache([:instances, :#{scn}]) { #{scn}_raws.each_index.map {|i| new i } } end
+        alias instances #{scn}_instances
+
+        def #{scn}_num_instances ; #{scn}_instances.length end
+      TXT
+    end
+  end
 end

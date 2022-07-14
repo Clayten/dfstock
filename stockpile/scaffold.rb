@@ -72,6 +72,10 @@ module DFStock
             array = list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
             }
+            # raise "Array of instances should not be empty!" if array.empty? # FIXME Will this fail on PlantCheese? # Yes, and on inactive categories!
+            # raise "Flags array should not be empty!" if flags_array.empty?
+            $fa = flags_array
+            # p [:in_define_method, desired_name, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
             def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
             array
           }

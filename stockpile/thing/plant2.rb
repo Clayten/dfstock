@@ -1,9 +1,6 @@
 require 'thing2'
 
 module DFStock
-  class Creature2 < Thing2
-  end
-
   class Plant2 < Thing2
     organic_category :Plants
 
@@ -34,8 +31,4 @@ module DFStock
     organic_category :Seed
     def token ; title_case raw.seed_plural end
   end
-
 end
-
-
-
