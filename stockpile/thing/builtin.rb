@@ -7,7 +7,7 @@ module DFStock
   end
 
   class Builtin < Thing
-    def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a end
+    def self.builtin_materials ; df.world.raws.mat_table.builtin.to_a.compact end
     def self.builtin_indexes ; builtin_materials.each_with_index.reject {|x,i| !x }.map {|v,i| i } end
     def self.builtins ; builtin_indexes.each_index.map {|i| Builtin.new i } end
     # def self.index_translation ; builtin_indexes end

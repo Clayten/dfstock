@@ -11,16 +11,19 @@ module DFStock
   class Thing2
     # Comparators
     include          Comparators2
+    include     PlantComparators2
+    include   BuiltinComparators2
+    include  CreatureComparators2
     include InorganicComparators2
 
     # Category Definitions
+    extend      ItemCategory
+    extend   BuiltinCategory
     extend   OrganicCategory
     extend InorganicCategory
     extend  CreatureCategory
     # Scaffolds
-    extend   OrganicScaffold
-    extend InorganicScaffold
-    extend  GenericScaffold
+    extend   GenericScaffold
 
     def self.format_classname x = nil ; (x || self).to_s.split('::').last.downcase end
     def self.parentclasses    x = nil ; c = x || self ; c.ancestors.select {|x| x.is_a? Class }.select {|x| x.name =~ /DFStock/ } end
@@ -35,26 +38,23 @@ module DFStock
       subclass_index  = "#{subclassname}_index"
         parent_index  = "#{parentclassname}_index"
 
-      p :_
-      # p [:inh1, subclass.ancestors]
-      # p [:inh2, parentclasses(subclass)]
-
-      p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
+      # p :_
+      # p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
 
       raise "This method uses the classname to scaffold accessors and can't be used by unnamed classes: #{subclassname}" if subclassname =~ /:/
 
       subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
-        def initialize idx, link: nil, **a
-          p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :link, !!link]
+        def initialize idx = nil, link: nil, raw: nil, material: nil
+          # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :raw_override, !!raw, :link, !!link]
+          raise "Incorrect usage, specify an index OR a raw/material" if idx && (raw || material)
           @#{subclass_index} = idx
-          prnt_index = ('#{parentclassname}' == 'thing2') ? idx : prnt_index = self.class.#{subclassname}_indexes[idx]
-          p [:parent_index, idx, :#{subclassname}_indexes, self.class.#{subclassname}_indexes[idx], prnt_index]
-          # super #{parent_index}, link: link
-          super prnt_index, link: link
+          @raw = raw if raw
+          @material = material if material
+          super idx, link: link
         end
 
-        def self.#{subclassname}_num_instances ; (respond_to?(#{subclassname}_raws) ? #{subclassname}_raws : #{subclassname}_types).length end
-        def self.#{subclassname}_instances ; #{subclassname}_num_instances.times.map {|i| p [:#{subclassname}_instances, i] ; new i } end
+        def self.num_instances ; (respond_to?(:raws) ? raws : types).length end
+        def self.instances     ; cache([:instances, :#{subclassname}]) { num_instances.times.map {|i| new i } } end
 
         # Define the accessor and the alias
         attr_reader :#{subclass_index}
@@ -63,13 +63,9 @@ module DFStock
         # Add to the description
         def to_s ; super + " #{subclass_index}=" + #{subclass_index}.to_s end
       TXT
-
-      # Override the normal 'parent_index' method when Thing2 is your parent and just use your own index
-      subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1) if parentclassname == 'thing2'
-        # p [:aliasing, :#{parentclassname}_index, :on, :#{subclassname}, :to, :#{subclassname}_index]
-        def #{parentclassname}_index ; #{subclass_index} end
-      TXT
     end
+
+    def self.subclasses ; ObjectSpace.each_object.select {|o| o.is_a?(Class) && o < self }.sort_by(&:to_s) end
 
     # Caching
     def self.internal_cache ; @@cache ||= Hash.new {|h,k| h[k] = {} } end
@@ -84,6 +80,7 @@ module DFStock
 
     # Utility
     def title_case string ; string.split(/\s+/).map(&:downcase).map(&:capitalize).join(' ') end
+    def self.material_info type, index ; df::MaterialInfo.new type, index end
 
     # Linkage
     def link ; @link end
@@ -110,13 +107,52 @@ module DFStock
     # Base methods
     def token ; 'NONE' end
 
-    def to_s ; "#{self.class.name} token=#{token.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} link_index=#{link_index}" end
+    def raw       ; @raw || (@material ? nil : self.class.raws[index]) end
+    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : materials.first end
+    def materials ; ms = has_raw? ? raw.material : material ; [*ms] end
+
+    def active_flags ms ; ms = [*ms] ; Hash[ms.map(&:flags).inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def mfah ; materials.inject({}) {|h,m| h[m.id] = active_flags m ; h } end
+    def material_flags ms = nil
+      return {} unless has_material?
+      active_flags(ms || materials)
+    end
+    def raw_flags
+      return {} unless has_raw?
+      active_flags([raw])
+    end
+
+    def references
+      (Thing2.subclasses - [self.class]).map {|sc|
+        next unless idx =
+          if sc.respond_to? :raws
+            sc.raws.index raw
+          elsif sc.respond_to? :materials
+            sc.materials.index material
+          end
+        [sc, idx]
+      }.compact
+    end
+    def to_s
+      refs = references.map {|sc, idx| "#{self.class.format_classname sc}_index=#{idx}" }.join(' ')
+      "#{self.class.name} token=#{token.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
+      "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
+    end
     def inspect ; "#<#{to_s}>" rescue super end
+
+    def method_missing mn, *args
+      super unless mn =~ /_index/
+      klassname = mn[0...mn.to_s.index('_index')]
+      klass, index = references.find {|klass, _| self.class.format_classname(klass) == klassname }
+      return index if klass
+      super
+    end
 
     attr_accessor :link_index # alias a later index over this to change what array is indexed into
     def initialize index, link: nil
-      p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
+      # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing2
+      return true if (@raw || @material) && index.nil?
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
       @link_index = index
