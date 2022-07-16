@@ -67,11 +67,7 @@ module DFStock
     from_raws(:plant, &:tree?)
     def material ; mat_wood || mat_structural || materials.first end
 
-    def value   ; wood.material_value if wood end
-    def color   ; wood.build_color if wood end
-    def density ; wood.solid_density if wood end
-
     def link_index ; plant2_index end
-    def token ; raw.name_plural end
+    def token ; raw_name_plural end
   end
 end

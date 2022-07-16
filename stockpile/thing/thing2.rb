@@ -132,7 +132,9 @@ module DFStock
 
     # Instead of an inheritance-based class structure this finds each class that wraps the same data and the index-number it uses
     def references
-      id = [:references, *([:raw, raw._memaddr] if raw || [:material, material._memaddr] if material || [:type, type] if respond_to?(:type))]
+      id = [:references, *(([:raw, raw._memaddr] if raw) ||
+                          ([:material, material._memaddr] if material) ||
+                          ([:type, type] if respond_to?(:type)))]
       cache(id) {
         Thing2.subclasses.map {|sc|
           next unless idx =

@@ -8,7 +8,6 @@ module DFStock
 
   class MiscLiquid2 < Thing2
     from_list [materials_builtin[11], raws_inorganic[33].material]
-
     def material ; type end
     def token ; material.state_name[:Liquid] end
   end

@@ -89,11 +89,11 @@ module DFStock
 
   module AmmoMod
     extend Scaffold
-    add_array(Ammo2,             :type)
-    add_array(Metal2,            :mats,       :metals)
-    add_array(AmmoOtherMaterial, :other_mats, :other_materials)
-    add_array(Quality2,          :quality_core)
-    add_array(Quality2,          :quality_total)
+    add_array(Ammo2,              :type)
+    add_array(Metal2,             :mats,       :metals)
+    add_array(AmmoOtherMaterial2, :other_mats, :other_materials)
+    add_array(Quality2,           :quality_core)
+    add_array(Quality2,           :quality_total)
   end
 
   module CoinMod
@@ -177,8 +177,8 @@ module DFStock
     add_array(ArmorShield2,        :shield)
     add_array(Metal2,              :mats,       :metals)
     add_array(ArmorOtherMaterial2, :other_mats, :other_materials)
-    add_array(Quality2,             :quality_core)
-    add_array(Quality2,             :quality_total)
+    add_array(Quality2,            :quality_core)
+    add_array(Quality2,            :quality_total)
   end
 
   module SheetMod

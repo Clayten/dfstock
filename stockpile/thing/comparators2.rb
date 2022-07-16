@@ -6,6 +6,45 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Comparators2
+    def food_indexes ms = materials
+      ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
+    end
+
+    def materials_by_category
+      food_indexes.map {|m,i| [i.keys.first, m] }.inject(Hash.new {|h,k| h[k] = [] }) {|h,(k,m)| h[k] << m ; h }
+    end
+
+    def  tile_color     ; material.tile_color  if material end
+    def build_color     ; material.build_color if material end
+    def basic_color     ; material.basic_color if material end
+    def state_color     ; material.state_color if material end
+    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if material end
+    def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
+    def color
+      fore, back, bright = tile_color.to_a
+      fore, bright = basic_color.to_a
+      color_definitions[[fore, bright]]
+    end
+
+    def color_definitions
+      {[0,0] => :black,       [0,1] => :dark_gray,
+       [1,0] => :blue,        [1,1] => :light_blue,
+       [2,0] => :green,       [2,1] => :light_green,
+       [3,0] => :cyan,        [3,1] => :light_cyan,
+       [4,0] => :red,         [4,1] => :light_red,
+       [5,0] => :magenta,     [5,1] => :light_magenta,
+       [6,0] => :brown,       [6,1] => :yellow,
+       [7,0] => :light_gray,  [7,1] => :white
+      }
+    end
+
+    def adjective ; raw.adjective if raw.respond_to?(:adjective) && !raw.adjective.empty? end
+    def raw_name        ; raw.respond_to?(:name)        ? raw.name          : nil end
+    def raw_name_plural ; raw.respond_to?(:name_plural) ? raw.name_plural   : raw_name end
+    def raw_flags       ; raw.respond_to?(:flags)       ? raw.flags.a       : [] end
+    def raw_base_flags  ; raw.respond_to?(:base_flags)  ? raw.base_flags.a  : [] end
+    def raw_props_flags ; raw.respond_to?(:props)       ? raw.props.flags.a : [] end
+    def raw_strings     ; raw.respond_to?(:raw_strings) ? raw.raw_strings   : [] end
   end
 
   module BuiltinComparators2
@@ -33,8 +72,9 @@ module DFStock
     def thread?     ; !!mat_thread end
     def structural? ; !!mat_structural end
 
-    def edible_cooked?  ; material_flags[:EDIBLE_COOKED] end
-    def edible_raw?     ; material_flags[:EDIBLE_RAW] end
+    # FIXME these are wrong for category-based classes
+    def edible_cooked?  ; material_flags(material)[:EDIBLE_COOKED] end
+    def edible_raw?     ; material_flags(material)[:EDIBLE_RAW] end
     def edible?         ; edible_cooked? || edible_raw? end
     def alcohol_producing? ; has_material? && material_flags[:ALCOHOL_PLANT] end
     def brewable?       ;  alcohol_producing? && !%w(DRINK SEED MILL).include?(material.id) end
