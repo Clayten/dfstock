@@ -71,6 +71,7 @@ module DFStock
     def color   ; wood.build_color if wood end
     def density ; wood.solid_density if wood end
 
+    def link_index ; plant2_index end
     def token ; raw.name_plural end
   end
 end

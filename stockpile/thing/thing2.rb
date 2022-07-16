@@ -17,13 +17,13 @@ module DFStock
     include InorganicComparators2
 
     # Category Definitions
-    extend      ItemCategory
     extend   BuiltinCategory
     extend   OrganicCategory
     extend InorganicCategory
     extend  CreatureCategory
+    extend      ItemCategory
     # Scaffolds
-    extend   GenericScaffold
+    extend StockScaffold
 
     def self.format_classname x = nil ; (x || self).to_s.split('::').last.downcase end
     def self.parentclasses    x = nil ; c = x || self ; c.ancestors.select {|x| x.is_a? Class }.select {|x| x.name =~ /DFStock/ } end
@@ -44,17 +44,21 @@ module DFStock
       raise "This method uses the classname to scaffold accessors and can't be used by unnamed classes: #{subclassname}" if subclassname =~ /:/
 
       subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
-        def initialize idx = nil, link: nil, raw: nil, material: nil
+        def initialize idx = nil, link: nil, raw: nil, material: nil, type: nil
           # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :raw_override, !!raw, :link, !!link]
-          raise "Incorrect usage, specify an index OR a raw/material" if idx && (raw || material)
+          raise "Incorrect usage, specify an index OR a raw/material/type" if idx && (raw || material || type)
+
           @#{subclass_index} = idx
-          @raw = raw if raw
+          # Overrides for testing
+          @raw      = raw      if raw
           @material = material if material
+          @type     = type     if type
+
           super idx, link: link
         end
 
         def self.num_instances ; send(%w(raws materials types).find {|mn| respond_to? mn }).length end
-        def self.instances     ; cache([:instances, :#{subclassname}]) { num_instances.times.map {|i| new i } } end
+        def self.instances     ; cache([:instances, #{subclass}]) { num_instances.times.map {|i| new i } } end
 
         # Define the accessor and the alias
         attr_reader :#{subclass_index}
@@ -126,24 +130,28 @@ module DFStock
       active_flags([raw])
     end
 
+    # Instead of an inheritance-based class structure this finds each class that wraps the same data and the index-number it uses
     def references
-      (Thing2.subclasses - [self.class]).map {|sc|
-        next unless idx =
-          if sc.respond_to? :raws
-            sc.raws.index raw
-          elsif sc.respond_to? :materials
-            sc.materials.index material
-          end
-        [sc, idx]
-      }.compact
+      id = [:references, *([:raw, raw._memaddr] if raw || [:material, material._memaddr] if material || [:type, type] if respond_to?(:type))]
+      cache(id) {
+        Thing2.subclasses.map {|sc|
+          next unless idx =
+            if    sc.respond_to? :raws                            ; sc.raws.index raw
+            elsif sc.respond_to? :materials                       ; sc.materials.index material
+          # elsif sc.respond_to?(:types)    && respond_to?(:type) ; sc.types.index type
+            end
+          [sc, idx]
+        }.compact
+      }
     end
     def to_s
-      refs = references.map {|sc, idx| "#{self.class.format_classname sc}_index=#{idx}" }.join(' ')
+      refs = references.map {|sc, idx| next if sc == self ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
       "#{self.class.name} token=#{token.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
       "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
     end
     def inspect ; "#<#{to_s}>" rescue super end
 
+    # Only for xyz_index, looks up class XYZ in references and fetches that classes index for this raw/material/thing
     def method_missing mn, *args
       super unless mn =~ /_index/
       klassname = mn[0...mn.to_s.index('_index')]
@@ -156,7 +164,7 @@ module DFStock
     def initialize index, link: nil
       # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing2
-      return true if (@raw || @material) && index.nil?
+      return true if (@raw || @material || @type) && index.nil?
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
       @link_index = index
