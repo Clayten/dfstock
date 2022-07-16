@@ -53,7 +53,7 @@ module DFStock
           super idx, link: link
         end
 
-        def self.num_instances ; (respond_to?(:raws) ? raws : types).length end
+        def self.num_instances ; send(%w(raws materials types).find {|mn| respond_to? mn }).length end
         def self.instances     ; cache([:instances, :#{subclassname}]) { num_instances.times.map {|i| new i } } end
 
         # Define the accessor and the alias
@@ -87,9 +87,9 @@ module DFStock
     def linked? ; link && !link.empty? end
 
     def check_index
-      raise "No linked array" unless link
-      raise "Linked array is empty - did you enable the category?" if link.empty?
-      raise "Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
+      raise "#{self.class}: No linked array" unless link
+      raise "#{self.class}: Linked array is empty - did you enable the category?" if link.empty?
+      raise "#{self.class}: Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
     end
     def set x ; check_index ; link[link_index] = !!x end
     def get   ; check_index ; link[link_index] end
@@ -107,8 +107,12 @@ module DFStock
     # Base methods
     def token ; 'NONE' end
 
-    def raw       ; @raw || (@material ? nil : self.class.raws[index]) end
-    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : materials.first end
+    def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
+    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw?) end
+
+    def has_raw?      ; !!(@raw      || raw      rescue false) end
+    def has_material? ; !!(@material || material rescue false) end
+
     def materials ; ms = has_raw? ? raw.material : material ; [*ms] end
 
     def active_flags ms ; ms = [*ms] ; Hash[ms.map(&:flags).inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end

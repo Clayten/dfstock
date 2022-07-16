@@ -1,6 +1,17 @@
 require 'thing'
 require 'thing2'
+require 'inorganic'
 require 'inorganic2'
+require 'creature'
+require 'creature2'
+require 'plant'
+require 'plant2'
+require 'misc'
+require 'misc2'
+require 'builtin'
+require 'builtin2'
+require 'item'
+require 'item2'
 
 module DFStock
 
@@ -16,73 +27,73 @@ module DFStock
     extend Scaffold
     add_flag(:empty_traps)
     add_flag(:empty_cages)
-    add_array(Animal, :enabled, :animals)
+    add_array(Animal2, :enabled, :animals)
   end
 
   module FoodMod
     extend Scaffold
     add_flag(:prepared_meals)
-    add_array(Meat,             :meat)
-    add_array(Fish,             :fish)
-    add_array(UnpreparedFish,   :unprepared_fish)
-    add_array(Egg,              :egg)
-    add_array(PlantProduct,     :plants)
-    add_array(PlantDrink,       :drink_plant)
-    add_array(CreatureDrink,    :drink_animal)
-    add_array(PlantCheese,      :cheese_plant)
-    add_array(CreatureCheese,   :cheese_animal)
-    add_array(Seed2,            :seeds)
-    add_array(FruitLeaf2,       :leaves, :fruitleaves)
-    add_array(PlantPowder2,     :powder_plant)
-    add_array(CreaturePowder,   :powder_creature)
-    add_array(Fat,              :glob, :glob_fat)
-    add_array(Paste,            :glob_paste)
-    add_array(Pressed,          :glob_pressed)
-    add_array(PlantExtract,     :liquid_plant)
-    add_array(CreatureExtract,  :liquid_animal)
-    add_array(MiscLiquid,       :liquid_misc)
+    add_array(Meat2,             :meat)
+    add_array(Fish2,             :fish)
+    add_array(UnpreparedFish2,   :unprepared_fish)
+    add_array(Egg2,              :egg)
+    add_array(PlantProduct2,     :plants)
+    add_array(PlantDrink2,       :drink_plant)
+    add_array(CreatureDrink2,    :drink_animal)
+    add_array(PlantCheese2,      :cheese_plant)
+    add_array(CreatureCheese2,   :cheese_animal)
+    add_array(Seed2,             :seeds)
+    add_array(FruitLeaf2,        :leaves, :fruitleaves)
+    add_array(PlantPowder2,      :powder_plant)
+    add_array(CreaturePowder2,   :powder_creature)
+    add_array(Fat2,              :glob, :glob_fat)
+    add_array(Paste2,            :glob_paste)
+    add_array(Pressed2,          :glob_pressed)
+    add_array(PlantExtract2,     :liquid_plant)
+    add_array(CreatureExtract2,  :liquid_animal)
+    add_array(MiscLiquid2,       :liquid_misc)
   end
 
   module FurnitureMod
     extend Scaffold
-    add_array(Furniture,              :type)
-    add_array(CutStone2,              :mats,          :stones)
-    add_array(Metal2,                 :mats,          :metals)
-    add_array(FurnitureOtherMaterial, :other_mats,    :other_materials)
-    add_array(Quality,                :quality_core)
-    add_array(Quality,                :quality_total)
+    add_array(Furniture2,              :type)
+    add_array(CutStone2,               :mats,          :stones)
+    add_array(Metal2,                  :mats,          :metals)
+    add_array(FurnitureOtherMaterial2, :other_mats,    :other_materials)
+    add_array(Quality2,                :quality_core)
+    add_array(Quality2,                :quality_total)
   end
 
   module RefuseMod
     extend Scaffold
     add_flag( :fresh_raw_hide)
     add_flag(:rotten_raw_hide)
-  # add_array(Refuse, :type)
-    add_array(Animal, :corpses)
-    add_array(Animal, :body_parts)
-    add_array(Animal, :skulls)
-    add_array(Animal, :bones)
-    add_array(Animal, :shells)
-    add_array(Animal, :teeth)
-    add_array(Animal, :horns)
-    add_array(Animal, :hair)
+  # add_array(Refuse2, :type)
+    add_array(Animal2, :corpses)
+    add_array(Animal2, :body_parts)
+    add_array(Animal2, :skulls)
+    add_array(Animal2, :bones)
+    add_array(Animal2, :shells)
+    add_array(Animal2, :teeth)
+    add_array(Animal2, :horns)
+    add_array(Animal2, :hair)
   end
 
   module StoneMod
     extend Scaffold
-    add_array(Ore2,          :mats, :ore)
-    add_array(EconomicStone2,:mats, :economic)
-    add_array(OtherStone2,   :mats, :other)
-    add_array(Clay2,         :mats, :clay)
+    add_array(Ore2,           :mats, :ore)
+    add_array(EconomicStone2, :mats, :economic)
+    add_array(OtherStone2,    :mats, :other)
+    add_array(Clay2,          :mats, :clay)
   end
 
   module AmmoMod
     extend Scaffold
-    add_array(Ammo,              :type)
+    add_array(Ammo2,             :type)
     add_array(Metal2,            :mats,       :metals)
     add_array(AmmoOtherMaterial, :other_mats, :other_materials)
-    add_array(Quality,           :quality_core)
-    add_array(Quality,           :quality_total)
+    add_array(Quality2,          :quality_core)
+    add_array(Quality2,          :quality_total)
   end
 
   module CoinMod
@@ -92,88 +103,88 @@ module DFStock
 
   module BarsBlocksMod
     extend Scaffold
-    add_array(Metal2,             :bars_mats,         :bars_metals)
-    add_array(BarOtherMaterial,   :bars_other_mats,   :bars_other)
-    add_array(CutStone2,          :blocks_mats,       :blocks_stone)
-    add_array(Metal2,             :blocks_mats,       :blocks_metals)
-    add_array(BlockOtherMaterial, :blocks_other_mats, :blocks_other)
+    add_array(Metal2,              :bars_mats,         :bars_metals)
+    add_array(BarOtherMaterial2,   :bars_other_mats,   :bars_other)
+    add_array(CutStone2,           :blocks_mats,       :blocks_stone)
+    add_array(Metal2,              :blocks_mats,       :blocks_metals)
+    add_array(BlockOtherMaterial2, :blocks_other_mats, :blocks_other)
   end
 
   module GemsMod
     extend Scaffold
-    add_array(Gem,      :rough_mats,       :rough_gems)
-    add_array(Glass,    :rough_other_mats, :rough_glass)
-    add_array(Gem,      :cut_mats,         :cut_gems)
-    add_array(Glass,    :cut_other_mats,   :cut_glass)
-    add_array(CutStone2,:cut_mats,         :cut_stone)
+    add_array(Gem2,      :rough_mats,       :rough_gems)
+    add_array(Glass2,    :rough_other_mats, :rough_glass)
+    add_array(Gem2,      :cut_mats,         :cut_gems)
+    add_array(Glass2,    :cut_other_mats,   :cut_glass)
+    add_array(CutStone2, :cut_mats,         :cut_stone)
   end
 
   module FinishedGoodsMod
     extend Scaffold
-    add_array(FinishedGood,               :type)
-    add_array(CutStone2,                  :mats,       :stones)
-    add_array(Metal2,                     :mats,       :metals)
-    add_array(Gem,                        :mats,       :gems)
-    add_array(FinishedGoodsOtherMaterial, :other_mats, :other_materials)
-    add_array(Quality,                    :quality_core)
-    add_array(Quality,                    :quality_total)
+    add_array(FinishedGood2,               :type)
+    add_array(CutStone2,                   :mats,       :stones)
+    add_array(Metal2,                      :mats,       :metals)
+    add_array(Gem2,                        :mats,       :gems)
+    add_array(FinishedGoodsOtherMaterial2, :other_mats, :other_materials)
+    add_array(Quality2,                    :quality_core)
+    add_array(Quality2,                    :quality_total)
   end
 
   module LeatherMod
     extend Scaffold
-    add_array(Leather, :mats, :leather)
+    add_array(Leather2, :mats, :leather)
   end
 
   module ClothMod
     extend Scaffold
-    add_array(Silk,         :thread_silk)
-    add_array(PlantFiber,   :thread_plant)
-    add_array(Yarn,         :thread_yarn)
-    add_array(MetalThread,  :thread_metal)
-    add_array(Silk,         :cloth_silk)
-    add_array(PlantFiber,   :cloth_plant)
-    add_array(Yarn,         :cloth_yarn)
-    add_array(MetalThread,  :cloth_metal)
+    add_array(Silk2,         :thread_silk)
+    add_array(PlantFiber2,   :thread_plant)
+    add_array(Yarn2,         :thread_yarn)
+    add_array(MetalThread2,  :thread_metal)
+    add_array(Silk2,         :cloth_silk)
+    add_array(PlantFiber2,   :cloth_plant)
+    add_array(Yarn2,         :cloth_yarn)
+    add_array(MetalThread2,  :cloth_metal)
   end
 
   module WoodMod
     extend Scaffold
-    add_array(Tree, :mats, :tree)
+    add_array(Tree2, :mats, :tree)
   end
 
   module WeaponsMod
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    add_array(Weapon,              :weapon_type,   :weapons)
-    add_array(TrapWeapon,          :trapcomp_type, :traps)
-    add_array(Metal2,              :mats,          :metals)
-    add_array(CutStone2,           :mats,          :stones)
-    add_array(WeaponOtherMaterial, :other_mats,    :other_materials)
-    add_array(Quality,             :quality_core)
-    add_array(Quality,             :quality_total)
+    add_array(Weapon2,              :weapon_type,   :weapons)
+    add_array(TrapWeapon2,          :trapcomp_type, :traps)
+    add_array(Metal2,               :mats,          :metals)
+    add_array(CutStone2,            :mats,          :stones)
+    add_array(WeaponOtherMaterial2, :other_mats,    :other_materials)
+    add_array(Quality2,             :quality_core)
+    add_array(Quality2,             :quality_total)
   end
 
   module ArmorMod
     extend Scaffold
     add_flag(:usable)
     add_flag(:unusable)
-    add_array(ArmorBody,           :body)
-    add_array(ArmorHead,           :head)
-    add_array(ArmorFeet,           :feet)
-    add_array(ArmorHand,           :hands)
-    add_array(ArmorLeg,            :legs)
-    add_array(ArmorShield,         :shield)
+    add_array(ArmorBody2,          :body)
+    add_array(ArmorHead2,          :head)
+    add_array(ArmorFeet2,          :feet)
+    add_array(ArmorHand2,          :hands)
+    add_array(ArmorLeg2,           :legs)
+    add_array(ArmorShield2,        :shield)
     add_array(Metal2,              :mats,       :metals)
-    add_array(WeaponOtherMaterial, :other_mats, :other_materials)
-    add_array(Quality,             :quality_core)
-    add_array(Quality,             :quality_total)
+    add_array(ArmorOtherMaterial2, :other_mats, :other_materials)
+    add_array(Quality2,             :quality_core)
+    add_array(Quality2,             :quality_total)
   end
 
   module SheetMod
     extend Scaffold
-    add_array(Paper,     :paper)
-    add_array(Parchment, :parchment)
+    add_array(Paper2,     :paper)
+    add_array(Parchment2, :parchment)
   end
 
   # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category

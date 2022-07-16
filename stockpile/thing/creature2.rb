@@ -11,6 +11,7 @@ module DFStock
   class Animal2 < Thing2
     from_raws(:creature) {|x| x.is_stockpile_animal? }
     def token ; n = raw.name[1] ; n =~ /[A-Z]/ ? n : n.capitalize end # Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
+    def link_index ; creature2_index end
   end
 
   class Meat2 < Thing2
@@ -21,7 +22,8 @@ module DFStock
   class Fish2 < Thing2
     from_category :Fish
     def self.infos ; end
-    def self.raws ; types.map {|creature_index, caste_index| raws_creature[creature_index] } end
+    def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
+    def self.materials ; cache([:materials, self]) { raws.map {|r| [*r.material].first } } end
 
     def caste_index ; self.class.types[index].last end
     def caste ; raw.caste[caste_index] end
@@ -31,7 +33,8 @@ module DFStock
   class UnpreparedFish2 < Thing2
     from_category :UnpreparedFish
     def self.infos ; end
-    def self.raws ; types.map {|creature_index, caste_index| raws_creature[creature_index] } end
+    def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
+    def self.materials ; cache([:materials, self]) { raws.map {|r| [*r.material].first } } end
 
     def caste_index ; self.class.types[index].last end
     def caste ; raw.caste[caste_index] end
@@ -40,10 +43,9 @@ module DFStock
 
   class Egg2 < Thing2
     from_category :Eggs
-
     def self.infos ; end
-    def self.raws ; types.map {|creature_index, caste_index| raws_creature[creature_index] } end
-    def self.materials ; raws.map {|r| r.material.select {|m| m.id =~  /YOLK/i } } end
+    def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
+    def self.materials ; cache([:materials, self]) { raws.map {|r| r.material.find {|m| m.id =~  /YOLK/i } } } end
 
     def caste ; raw.caste.find {|c| c.flags[:LAYS_EGGS] } end
     def token ; title_case (caste.caste_name.first.split(/\s+/) + ['egg']).join(' ') end
@@ -76,7 +78,7 @@ module DFStock
 
   class Fat2 < Thing2
     from_category :Glob
-    def token ; title_case(raw.name.first) + " #{material.id.downcase}" end
+    def token ; "#{raw.name.first} #{material.id.downcase}" end
   end
 
   class CreatureExtract2 < Thing2
@@ -89,5 +91,8 @@ module DFStock
     def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]}") end
   end
 
-  # class Parchment # Leather with a different token
+  class Parchment2 < Thing2
+    from_category :Parchment
+    def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]} Sheet") end
+  end
 end

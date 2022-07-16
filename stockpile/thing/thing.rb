@@ -83,7 +83,7 @@ module DFStock
 
     def check_index
       raise "No linked array" unless link
-      raise "Linked array is empty - did you enable the category?" if link.empty?
+      raise "#{self.class}: Linked array is empty - did you enable the category?" if link.empty?
       raise "Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
     end
     def set x ; check_index ; link[link_index] = !!x end

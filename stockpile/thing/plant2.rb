@@ -10,6 +10,7 @@ module DFStock
   class PlantProduct2 < Thing2
     from_raws(:plant, &:crop?)
     def token ; title_case raw.name end
+    def link_index ; plant2_index end
   end
 
   class PlantDrink2 < Thing2
@@ -44,12 +45,12 @@ module DFStock
 
   class PlantFiber2 < Thing2
     from_category :PlantFiber
-    def token ; title_case raw.name + ' Thread' end
+    def token ; title_case "#{mat_thread.state_name[:Solid]} Thread" end
   end
 
   class Paper2 < Thing2
     from_raws(:plant) {|x| x.materials.any? {|mat| mat.reaction_class.any? {|rc| rc =~ /paper/i } } }
-    def token ; title_case "#{mat_thread.state_name[:Solid]} Sheet" end
+    def token ; title_case "#{mat_paper.state_name[:Solid]} Sheet" end
   end
 
   class Pressed2 < Thing2

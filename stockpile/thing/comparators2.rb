@@ -6,8 +6,6 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Comparators2
-    def has_raw?      ; !!(raw      rescue false) end
-    def has_material? ; !!(@material || material rescue false) end
   end
 
   module BuiltinComparators2
@@ -24,6 +22,7 @@ module DFStock
     def mat_seed       ; materials.find {|m| m.id == 'SEED' } end
     def mat_leaf       ; materials.find {|m| m.id == 'LEAF' } end
     def mat_thread     ; materials.find {|m| m.id == 'THREAD' } end
+    def mat_paper      ; materials.find {|m| m.reaction_class.any? {|r| r.to_s =~ /PAPER/ } } end
     def mat_structural ; materials.find {|m| m.id == 'STRUCTURAL' } end
 
     def mill?       ; !!mat_mill end

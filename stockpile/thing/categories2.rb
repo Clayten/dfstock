@@ -42,8 +42,7 @@ module DFStock
       # Save the discriminator block as a closure
       mc.define_method("discriminator") { discriminator }
       class_eval(<<~TXT, __FILE__, __LINE__ + 1)
-        def self.materials ; materials_builtin.select {|m| i = new(material: m) ; discriminator[i] } end
-        def self.types ; materials end # for .num_instances
+        def self.materials ; cache([:materials, :#{scn}]) { materials_builtin.select {|m| i = new(material: m) ; discriminator[i] } } end
 
         def raw ; nil end
         def material ; @material || self.class.materials[index] end

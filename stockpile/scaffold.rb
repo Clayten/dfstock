@@ -68,7 +68,8 @@ module DFStock
           end
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send base_name
-            list = stockklass.index_translation # This is the reason this is a consistent class method
+            # list = stockklass.index_translation # This is the reason this is a consistent class method
+            list = stockklass.respond_to?(:index_translation) ? stockklass.index_translation : (0...stockklass.num_instances).to_a
             array = list.each_with_index.map {|_, idx|
               stockklass.new idx, link: flags_array
             }
