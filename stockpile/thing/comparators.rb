@@ -5,7 +5,7 @@ module DFStock
   # A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
-  module Comparators2
+  module Comparators
     def food_indexes ms = materials
       ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
     end
@@ -47,11 +47,11 @@ module DFStock
     def raw_strings     ; raw.respond_to?(:raw_strings) ? raw.raw_strings   : [] end
   end
 
-  module BuiltinComparators2
+  module BuiltinComparators
     def is_glass? ; material_flags[:IS_GLASS] end
   end
 
-  module PlantComparators2
+  module PlantComparators
     def growths   ; has_raw? ? raw.growths : [] end
     def growth    ; growths.find {|g| g.str_growth_item.include? material.id } end
 
@@ -98,7 +98,7 @@ module DFStock
     def crop? ; winter? || spring? || summer? || autumn? end
   end
 
-  module CreatureComparators2
+  module CreatureComparators
     def is_wagon?    ; raw_flags[:EQUIPMENT_WAGON] end
     def is_creature? ; raw.respond_to?(:creature_id) && !is_wagon? end
 
@@ -126,7 +126,7 @@ module DFStock
   end
 
 
-  module InorganicComparators2
+  module InorganicComparators
     def is_gem?   ; material.flags[:IS_GEM] end
     def is_stone? ; material.flags[:IS_STONE] end
     def is_metal? ; material.flags[:IS_METAL] end

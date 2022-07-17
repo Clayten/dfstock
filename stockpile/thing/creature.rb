@@ -1,25 +1,25 @@
-require 'thing2'
+require 'thing'
 
 module DFStock
 
-  class Creature2 < Thing2
+  class Creature < Thing
     from_raws(:creature) { true }
     def token ; title_case raw.name[1] end
   end
 
   # The stockpile 'Animal' class, not all creatures
-  class Animal2 < Thing2
+  class Animal < Thing
     from_raws(:creature) {|x| x.is_stockpile_animal? }
     def token ; n = raw.name[1] ; n =~ /[A-Z]/ ? n : n.capitalize end # Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
-    def link_index ; creature2_index end
+    def link_index ; creature_index end
   end
 
-  class Meat2 < Thing2
+  class Meat < Thing
     from_category :Meat
     def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
   end
 
-  class Fish2 < Thing2
+  class Fish < Thing
     from_category :Fish
     def self.infos ; end
     def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
@@ -30,7 +30,7 @@ module DFStock
     def token ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
   end
 
-  class UnpreparedFish2 < Thing2
+  class UnpreparedFish < Thing
     from_category :UnpreparedFish
     def self.infos ; end
     def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
@@ -41,7 +41,7 @@ module DFStock
     def token ; title_case "Unprepared Raw #{caste.caste_name.first}, #{caste_symbol}" end
   end
 
-  class Egg2 < Thing2
+  class Egg < Thing
     from_category :Eggs
     def self.infos ; end
     def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
@@ -51,47 +51,47 @@ module DFStock
     def token ; title_case (caste.caste_name.first.split(/\s+/) + ['egg']).join(' ') end
   end
 
-  class CreatureDrink2 < Thing2
+  class CreatureDrink < Thing
     from_category :CreatureDrink
     def token ; title_case "#{material.state_name[:Liquid]}" end
   end
 
-  class CreatureCheese2 < Thing2
+  class CreatureCheese < Thing
     from_category :CreatureCheese
     def token ; title_case "#{material.state_name[:Solid]}" end
   end
 
-  class CreaturePowder2 < Thing2
+  class CreaturePowder < Thing
     from_category :CreaturePowder
     def token ; "#{material.state_name[:Solid]}" end
   end
 
-  class Silk2 < Thing2
+  class Silk < Thing
     from_category :Silk
     def token ; title_case(raw.respond_to?(:name) ? "#{raw.name.first} Silk" : material.state_name[:Solid]) end
   end
 
-  class Yarn2 < Thing2
+  class Yarn < Thing
     from_category :Yarn
     def token ; title_case "#{raw.name.first} #{material.state_name[:Solid]}" end
   end
 
-  class Fat2 < Thing2
+  class Fat < Thing
     from_category :Glob
     def token ; "#{raw.name.first} #{material.id.downcase}" end
   end
 
-  class CreatureExtract2 < Thing2
+  class CreatureExtract < Thing
     from_category :CreatureLiquid
     def token ; title_case "#{material.prefix} #{material.state_name[:Liquid]}".strip end
   end
 
-  class Leather2 < Thing2
+  class Leather < Thing
     from_category :Leather
     def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]}") end
   end
 
-  class Parchment2 < Thing2
+  class Parchment < Thing
     from_category :Parchment
     def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]} Sheet") end
   end

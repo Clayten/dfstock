@@ -1,5 +1,5 @@
-require 'comparators2'
-require 'categories2'
+require 'comparators'
+require 'categories'
 
 module DFStock
 
@@ -8,13 +8,13 @@ module DFStock
   # A plant raw is the plant definition, will often include many materials, each of which will be stockpiled differently, seeds vs berries, etc.
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
-  class Thing2
+  class Thing
     # Comparators
-    include          Comparators2
-    include     PlantComparators2
-    include   BuiltinComparators2
-    include  CreatureComparators2
-    include InorganicComparators2
+    include          Comparators
+    include     PlantComparators
+    include   BuiltinComparators
+    include  CreatureComparators
+    include InorganicComparators
 
     # Category Definitions
     extend   BuiltinCategory
@@ -136,7 +136,7 @@ module DFStock
                           ([:material, material._memaddr] if material) ||
                           ([:type, type] if respond_to?(:type)))]
       cache(id) {
-        Thing2.subclasses.map {|sc|
+        Thing.subclasses.map {|sc|
           next unless idx =
             if    sc.respond_to? :raws                            ; sc.raws.index raw
             elsif sc.respond_to? :materials                       ; sc.materials.index material
@@ -165,7 +165,7 @@ module DFStock
     attr_accessor :link_index # alias a later index over this to change what array is indexed into
     def initialize index, link: nil
       # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
-      raise "You can't instantiate the base class" if self.class == Thing2
+      raise "You can't instantiate the base class" if self.class == Thing
       return true if (@raw || @material || @type) && index.nil?
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
@@ -178,7 +178,7 @@ end
 
 # FIXME - for rerunning inheritance during testing
 def reinherit ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing2 }.sort_by {|k| k.ancestors.length }
+  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
   # p [:ks, ks]
   ks.each {|k|
     kp = k.ancestors[1]
@@ -187,7 +187,7 @@ def reinherit ks = nil
   }
 end
 def ccache ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing2 }.sort {|a,b| a <=> b || 0 }.reverse
+  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort {|a,b| a <=> b || 0 }.reverse
   # p [:ks, ks]
   ks.each {|k| k.clear_cache }
 end

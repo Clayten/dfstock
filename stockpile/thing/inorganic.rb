@@ -1,61 +1,61 @@
-require 'thing2'
+require 'thing'
 
 module DFStock
 
-  class Inorganic2 < Thing2
+  class Inorganic < Thing
     from_raws(:inorganic) { true }
     def token ; title_case material.state_name[:Solid] end
   end
 
-  class Metal2 < Thing2
+  class Metal < Thing
     from_raws(:inorganic) {|x| x.is_metal? }
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 
-  class MetalThread2 < Thing2
+  class MetalThread < Thing
     from_category :MetalThread
     def token ; title_case material.state_name[:Solid] end
   end
 
-  class Gem2 < Thing2
+  class Gem < Thing
     from_raws(:inorganic, &:is_gem?)
     def token ; material.gem_name2 end
   end
 
-  class CutStone2 < Thing2
+  class CutStone < Thing
     from_raws(:inorganic, &:is_stone?)
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 
-  class Stone2 < Thing2
+  class Stone < Thing
     # The .is_stone? flag does not correspond to stock-category stones.
     from_raws(:inorganic) {|x| x.is_ore? || x.is_clay? || x.is_economic_stone? || x.is_other_stone? }
     def token ; material.state_name[:Solid] end
   end
 
-  class Ore2 < Thing2
+  class Ore < Thing
     from_raws(:inorganic) {|x| x.is_ore? }
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 
-  class EconomicStone2 < Thing2
+  class EconomicStone < Thing
     from_raws(:inorganic) {|x| x.is_economic_stone? }
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 
-  class OtherStone2 < Thing2
+  class OtherStone < Thing
     from_raws(:inorganic) {|x| x.is_other_stone? }
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 
-  class Clay2 < Thing2
+  class Clay < Thing
     from_raws(:inorganic) {|x| x.is_clay? }
     def token ; material.state_name[:Solid] end
-    def link_index ; inorganic2_index end
+    def link_index ; inorganic_index end
   end
 end
