@@ -112,7 +112,7 @@ module DFStock
     def token ; 'NONE' end
 
     def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
-    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw?) end
+    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
 
     def has_raw?      ; !!(@raw      || raw      rescue false) end
     def has_material? ; !!(@material || material rescue false) end

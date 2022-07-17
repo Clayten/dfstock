@@ -20,7 +20,7 @@ module DFStock
 
   class Gem < Thing
     from_raws(:inorganic, &:is_gem?)
-    def token ; material.gem_name2 end
+    def token ; material.gem_name2 == 'STP' ? "#{material.gem_name1}s" : material.gem_name2 end
   end
 
   class CutStone < Thing
