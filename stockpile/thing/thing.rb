@@ -35,8 +35,6 @@ module DFStock
       raise "Improper inheritence" unless subclass < self
       subclassname    = format_classname subclass
       parentclassname = format_classname parentclass subclass
-      subclass_index  = "#{subclassname}_index"
-        parent_index  = "#{parentclassname}_index"
 
       # p :_
       # p [:inherited, subclass, :from, self, :parent, parentclass(subclass), :nm, subclassname, :pn, parentclassname]
@@ -48,7 +46,7 @@ module DFStock
           # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :raw_override, !!raw, :link, !!link]
           raise "Incorrect usage, specify an index OR a raw/material/type" if idx && (raw || material || type)
 
-          @#{subclass_index} = idx
+          @#{subclassname}_index = idx
           # Overrides for testing
           @raw      = raw      if raw
           @material = material if material
@@ -61,11 +59,11 @@ module DFStock
         def self.instances     ; cache([:instances, #{subclass}]) { num_instances.times.map {|i| new i } } end
 
         # Define the accessor and the alias
-        attr_reader :#{subclass_index}
-        alias index #{subclass_index}
+        attr_reader :#{subclassname}_index
+        alias index #{subclassname}_index
 
         # Add to the description
-        def to_s ; super + " #{subclass_index}=" + #{subclass_index}.to_s end
+        def to_s ; super + " #{subclassname}_index=" + #{subclassname}_index.to_s end
       TXT
     end
 
@@ -140,20 +138,20 @@ module DFStock
           next unless idx =
             if    sc.respond_to? :raws                            ; sc.raws.index raw
             elsif sc.respond_to? :materials                       ; sc.materials.index material
-          # elsif sc.respond_to?(:types)    && respond_to?(:type) ; sc.types.index type
+            elsif sc.respond_to?(:types)    && respond_to?(:type) ; sc.types.index type
             end
           [sc, idx]
         }.compact
       }
     end
     def to_s
-      refs = references.map {|sc, idx| next if sc == self ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
+      refs = references.map {|sc, idx| next if sc == self.class ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
       "#{self.class.name} token=#{token.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
       "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
     end
     def inspect ; "#<#{to_s}>" rescue super end
 
-    # Only for xyz_index, looks up class XYZ in references and fetches that classes index for this raw/material/thing
+    # Only for xyz_index, looks up class XYZ in references and fetches that class's index for this raw/material/thing
     def method_missing mn, *args
       super unless mn =~ /_index/
       klassname = mn[0...mn.to_s.index('_index')]
