@@ -117,7 +117,16 @@ module DFStock
 
     def materials ; ms = has_raw? ? raw.material : material ; [*ms] end
 
-    def active_flags ms ; ms = [*ms] ; Hash[ms.map(&:flags).inject({}) {|a,b| a.merge Hash[b.to_hash.select {|k,v| v }] }.sort_by {|k,v| k.to_s }] end
+    def active_flags ms
+      ms = [*ms]
+      Hash[ms.map {|x|
+        x.respond_to?(:flags) ? x.flags : {}
+      }.inject({}) {|a,b|
+        a.merge Hash[b.to_hash.select {|k,v| v }]
+      }.sort_by {|k,v|
+        k.to_s
+      }]
+    end
     def mfah ; materials.inject({}) {|h,m| h[m.id] = active_flags m ; h } end
     def material_flags ms = nil
       return {} unless has_material?
@@ -160,7 +169,7 @@ module DFStock
       super
     end
 
-    attr_accessor :link_index # alias a later index over this to change what array is indexed into
+    attr_accessor :link_index # redefine this to call another index if needed
     def initialize index, link: nil
       # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
       raise "You can't instantiate the base class" if self.class == Thing
@@ -168,7 +177,7 @@ module DFStock
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
       @link_index = index
-      @link = link
+      @link = link unless link.nil?
     end
   end
 
@@ -184,10 +193,7 @@ def reinherit ks = nil
     kp.inherited k
   }
 end
-def ccache ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort {|a,b| a <=> b || 0 }.reverse
-  # p [:ks, ks]
-  ks.each {|k| k.clear_cache }
-end
+# Reinherit should not be called unless followed by a reload
+def fullhack ; rehack ; reinherit ; rehack end
 def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
 def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
