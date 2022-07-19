@@ -91,10 +91,10 @@ module DFStock
     def grows_bud?   ; growth_ids.include? 'BUD' end
     def grows_leaf?  ; growth_ids.include? 'LEAVES' end # FIXME: Does this mean edible leaf? Add another check?
 
-    def winter? ; raw.flags[:WINTER] end
-    def spring? ; raw.flags[:SPRING] end
-    def summer? ; raw.flags[:SUMMER] end
-    def autumn? ; raw.flags[:AUTUMN] end
+    def winter? ; raw_flags[:WINTER] end
+    def spring? ; raw_flags[:SPRING] end
+    def summer? ; raw_flags[:SUMMER] end
+    def autumn? ; raw_flags[:AUTUMN] end
     def crop? ; winter? || spring? || summer? || autumn? end
   end
 
@@ -105,10 +105,6 @@ module DFStock
     def is_stockpile_animal?
       is_creature? && raw.creature_id !~ /^(FORGOTTEN_BEAST|TITAN|DEMON|NIGHT_CREATURE)_/
     end
-
-    def edible_cooked?    ; cache(:edible_cooked, index) { material_flags[:EDIBLE_COOKED] } end
-    def edible_raw?       ; cache(:edible_raw,    index) { material_flags[:EDIBLE_RAW] } end
-    def edible?           ; cache(:edible,        index) { edible_cooked? || edible_raw? } end
 
     # Finds male and female of egg-laying species
     def lays_eggs?        ; cache(:eggs,          index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end
