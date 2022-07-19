@@ -116,6 +116,17 @@ module DFStock
         klass.class_eval { undef_method actual_name }
         klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end"
       }
+
+      # Print a list of the array names, they're easy to forget
+      klass.class_eval(<<~TXT,__FILE__,__LINE__ + 1)
+        def describe_category
+          flags, arrays = features.map {|t,n1,n2,_| [t, (n2 || n1)] }.partition {|t,_| t == :flag }
+          puts stock_category_name.to_s + " contains these features:"
+          puts "Flags: #{ flags.map  {|_,n| n }.join(', ')}" unless flags.empty?
+          puts "Arrays: #{arrays.map {|_,n| n }.join(', ')}" unless arrays.empty?
+        end
+        def method_missing mn, *a ; describe_category ; super ; end
+      TXT
     end
   end
 
