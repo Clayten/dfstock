@@ -4,19 +4,23 @@ module DFStock
 
   class Creature < Thing
     from_raws(:creature) { true }
-    def token ; title_case raw.name[1] end
+    def caste ; raw.caste[@caste_index] if @caste_index end
+    def token ; title_case (caste ? caste.caste_name.first : raw.name[1]) end
   end
 
   # The stockpile 'Animal' class, not all creatures
   class Animal < Thing
     from_raws(:creature) {|x| x.is_stockpile_animal? }
-    def token ; n = raw.name[1] ; n =~ /[A-Z]/ ? n : n.capitalize end # Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
+    def caste ; raw.caste[@caste_index] if @caste_index end
+    # If the name is capitalized already, leave it. Otherwise, capitalize the first word. Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
+    def token ; n = (caste ? caste.caste_name.first : raw.name[1]) ; n =~ /[A-Z]/ ? n : n.capitalize end
     def link_index ; creature_index end
   end
 
   class Meat < Thing
     from_category :Meat
-    def token ; "#{material.prefix}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
+    def caste ; raw.caste[@caste_index] if @caste_index end
+    def token ; "#{(caste ? caste.caste_name.first : material.prefix)}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
   end
 
   class Fish < Thing
@@ -25,6 +29,7 @@ module DFStock
     def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
     def self.materials ; cache([:materials, self]) { raws.map {|r| [*r.material].first } } end
 
+    def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
     def caste ; raw.caste[caste_index] end
     def token ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
@@ -36,6 +41,7 @@ module DFStock
     def self.raws      ; cache([:raws,      self]) { types.map {|creature_index, caste_index| raws_creature[creature_index] } } end
     def self.materials ; cache([:materials, self]) { raws.map {|r| [*r.material].first } } end
 
+    def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
     def caste ; raw.caste[caste_index] end
     def token ; title_case "Unprepared Raw #{caste.caste_name.first}, #{caste_symbol}" end
@@ -48,16 +54,20 @@ module DFStock
     def self.materials ; cache([:materials, self]) { raws.map {|r| r.material.find {|m| m.id =~  /YOLK/i } } } end
 
     def caste ; raw.caste.find {|c| c.flags[:LAYS_EGGS] } end
-    def token ; title_case (caste.caste_name.first.split(/\s+/) + ['egg']).join(' ') end
+    def token ; title_case (caste.caste_name.first + ' egg') end
   end
 
   class CreatureDrink < Thing
     from_category :CreatureDrink
+    def caste_index ; raw.caste.index {|c| c.caste_id == 'WORKER' } end
+    def caste ; raw.caste[caste_index] end
     def token ; title_case "#{material.state_name[:Liquid]}" end
   end
 
   class CreatureCheese < Thing
     from_category :CreatureCheese
+    def caste_index ; raw.caste.index {|c| c.caste_id == 'MILKABLE' } end
+    def caste ; raw.caste[caste_index] end
     def token ; title_case "#{material.state_name[:Solid]}" end
   end
 
