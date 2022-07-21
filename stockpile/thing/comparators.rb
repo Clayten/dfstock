@@ -6,6 +6,19 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Comparators
+    def reaction_products ms = materials
+      Hash[
+        *ms = ms.map {|m|
+          r = m.reaction_product
+          r.id.each_with_index.map {|x,i|
+            mt, mi = r.material.mat_type[i], r.material.mat_index[i]
+            m = self.class.material_info(mt, mi).material
+            [x, m]
+          }
+        }.inject(&:+).flatten
+      ]
+    end
+
     def food_indexes ms = materials
       ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
     end
