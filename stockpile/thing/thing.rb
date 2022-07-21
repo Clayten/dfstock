@@ -42,28 +42,30 @@ module DFStock
       raise "This method uses the classname to scaffold accessors and can't be used by unnamed classes: #{subclassname}" if subclassname =~ /:/
 
       subclass.class_eval(<<~TXT, __FILE__, __LINE__ + 1)
-        def initialize idx = nil, link: nil, raw: nil, material: nil, type: nil
-          # p [:initialize_sub, :klass, self.class, :self, :#{subclassname}, :index, idx, :raw_override, !!raw, :link, !!link]
-          raise "Incorrect usage, specify an index OR a raw/material/type" if idx && (raw || material || type)
-
-          @#{subclassname}_index = idx
-          # Overrides for testing
-          @raw      = raw      if raw
-          @material = material if material
-          @type     = type     if type
-
-          super idx, link: link
-        end
-
-        def self.num_instances ; send(%w(raws materials types).find {|mn| respond_to? mn }).length end
-        def self.instances     ; cache([:instances, #{subclass}]) { num_instances.times.map {|i| new i } } end
-
         # Define the accessor and the alias
         attr_reader :#{subclassname}_index
         alias index #{subclassname}_index
 
         # Add to the description
         def to_s ; super + " #{subclassname}_index=" + #{subclassname}_index.to_s end
+
+        def initialize idx = nil, **kw
+          # p [:initialize_sub, :klass, self.class, :index, idx, :extra, kw.keys]
+          raise "Incorrect usage, specify an index OR a raw/material/type" if idx && (kw[:raw] || kw[:material] || kw[:type])
+
+          @#{subclassname}_index = idx
+
+          kw.each {|k,v|
+            # p [:kw_instance_variable_set, k, v.class]
+            instance_variable_set(('@' + k.to_s), v)
+          }
+          # p [:initialize_sub2, :instance_variable, instance_variables]
+
+          super(idx)
+        end
+
+        def self.num_instances ; send(%w(raws materials types).find {|mn| respond_to? mn }).length end
+        def self.instances     ; cache([:instances, #{subclass}]) { num_instances.times.map {|i| new i } } end
       TXT
     end
 
@@ -75,6 +77,7 @@ module DFStock
     def self.inspect_cache ; internal_cache end
     def self.cache *cache_id, &b
       cache_id = cache_id.first if cache_id.length == 1
+      # p [:cache, cache_id, :contained?, internal_cache.include?(cache_id)]
       return internal_cache[cache_id] if internal_cache.include?(cache_id)
       internal_cache[cache_id] = yield
     end
@@ -170,14 +173,13 @@ module DFStock
     end
 
     attr_accessor :link_index # redefine this to call another index if needed
-    def initialize index, link: nil
-      # p [:initialize_base, :klass, self.class, :index, index, :link, !!link]
+    def initialize index
+      # p [:initialize_base, :klass, self.class, :index, index]
       raise "You can't instantiate the base class" if self.class == Thing
       return true if (@raw || @material || @type) && index.nil?
       raise "No index provided - invalid #{self.class} creation" unless index
       raise "Invalid index '#{index.inspect}'" unless index.is_a?(Integer) && index >= 0
       @link_index = index
-      @link = link unless link.nil?
     end
   end
 
