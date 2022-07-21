@@ -223,6 +223,9 @@ module DFStock
     def enabled?  ; !!get end
 
     def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
+
+    def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
+    def inspect ; "#<#{to_s}>" end
   end
 
 end
