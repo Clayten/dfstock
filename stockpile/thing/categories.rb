@@ -41,7 +41,11 @@ module DFStock
         def self.materials ; cache([:materials, self]) { materials_builtin.select {|m| i = new(material: m) ; discriminator[i] } } end
 
         def raw ; nil end
-        def material ; @material || self.class.materials[index] end
+        def material
+          # p [:mat, self.class, !!@material, index, instance_variables]
+          return @material if @material
+          raise "No index for #{self}" unless index
+          self.class.materials[index] end
       TXT
     end
 
@@ -66,6 +70,11 @@ module DFStock
         def self.infos     ; cache([:infos,     self]) { types.map {|t,i| material_info t, i } } end
         def self.raws      ; cache([:raws,      self]) { infos.map {|i| i.send(i.mode.downcase) } } end
         def self.materials ; cache([:materials, self]) { infos.map &:material } end
+
+        def material  ; @material || self.class.materials[index] end
+
+        # The categories generally list specific materials, and the other raw materials are a distraction
+        def materials ; [material] end
       TXT
     end
 
