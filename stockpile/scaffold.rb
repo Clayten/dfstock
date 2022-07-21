@@ -54,8 +54,8 @@ module DFStock
           flags << [actual_name, desired_name, base_name]
           # p [:define_flag, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
-            klass.class_eval "alias #{base_name} #{actual_name}"
-            klass.class_eval "alias #{desired_name} #{base_name}"
+            klass.class_eval "alias #{base_name} #{actual_name}", __FILE__, __LINE__
+            klass.class_eval "alias #{desired_name} #{base_name}", __FILE__, __LINE__
           end
 
         elsif :array == type
@@ -64,7 +64,7 @@ module DFStock
           # p [:define_array, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
             raise "Ack! Trying to add #{actual_name} to #{stockklass}" unless klass.instance_methods.include?(actual_name)
-            klass.class_eval "alias #{base_name} #{actual_name}"
+            klass.class_eval "alias #{base_name} #{actual_name}", __FILE__, __LINE__
           end
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send base_name
@@ -108,13 +108,13 @@ module DFStock
         # p [:simple_wrapper, :an, actual_name, :dn, desired_name]
         next if actual_name == desired_name
         klass.class_eval { undef_method actual_name }
-        klass.class_eval "alias #{actual_name} #{desired_name}"
+        klass.class_eval "alias #{actual_name} #{desired_name}", __FILE__, __LINE__
       }
       shared_wrappers.map {|actual_name, _, _| actual_name}.uniq.each {|actual_name|
         wrapped_methods = wrappers.select {|a,d,_| a == actual_name }.map {|a,d,_| d }
         # p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
         klass.class_eval { undef_method actual_name }
-        klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end"
+        klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end", __FILE__, __LINE__
       }
 
       # Print a list of the array names, they're easy to forget
