@@ -163,12 +163,16 @@ module DFStock
     end
     def inspect ; "#<#{to_s}>" rescue super end
 
-    # Only for xyz_index, looks up class XYZ in references and fetches that class's index for this raw/material/thing
-    def method_missing mn, *args
-      super unless mn =~ /_index/
-      klassname = mn[0...mn.to_s.index('_index')]
+    def index_lookup index_name
+      klassname = index_name[0...index_name.to_s.index('_index')]
       klass, index = references.find {|klass, _| self.class.format_classname(klass) == klassname }
       return index if klass
+      raise "Index #{index_name} did not return a value for #{self.class}"
+    end
+
+    # Only for xyz_index, looks up class XYZ in references and fetches that class's index for this raw/material/thing
+    def method_missing mn, *args
+      return index_lookup(mn) if mn =~ /_index/
       super
     end
 
