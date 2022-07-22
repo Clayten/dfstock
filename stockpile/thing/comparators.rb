@@ -67,9 +67,6 @@ module DFStock
   end
 
   module PlantComparators
-    def growths   ; has_raw? ? raw.growths : [] end
-    def growth    ; growths.find {|g| g.str_growth_item.include? material.id } end
-
     def mat_mill       ; materials.find {|m| m.id == 'MILL' } end
     def mat_drink      ; materials.find {|m| m.id == 'DRINK' } end
     def mat_wood       ; materials.find {|m| m.id == 'WOOD' } end
@@ -95,12 +92,13 @@ module DFStock
     def brewable?       ;  alcohol_producing? && !%w(DRINK SEED MILL).include?(material.id) end
     def millable?       ; mill? end
 
-    def tree? ; raw.flags[:TREE] end
+    def tree? ; raw_flags[:TREE] if has_raw? end
 
     def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
     def above_ground? ; !subterranean end
 
-    def growths ; raw.growths end
+    def growths   ; (has_raw? && raw.respond_to?(:growths)) ? raw.growths.to_a : [] end
+    def growth    ; growths.find {|g| g.str_growth_item.include? material.id } end
     def growth_ids ; growths.map(&:id) end
     def grows_fruit? ; growth_ids.include? 'FRUIT' end
     def grows_bud?   ; growth_ids.include? 'BUD' end
