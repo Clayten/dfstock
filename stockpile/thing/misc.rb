@@ -1,4 +1,6 @@
-require 'thing/thing'
+require 'thing'
+require 'builtin'
+require 'creature'
 
 module DFStock
   class Furniture < Thing

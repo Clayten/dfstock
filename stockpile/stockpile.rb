@@ -238,8 +238,8 @@ if self.class.const_defined? :DFHack
   end
   class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod
     def enable ; raise "Not functional, can't enable sub-categories" end
-    def cookable      ; raise ; end # just the items, across sub-categories, that can become a meal in a kitchen
-    def needs_cooking ; raise ; end # just the items, across sub-categories, that need a kitchen to become food
+    def cookable      ; all_items.select(&:edible_cooked?) ; end # just the items, across sub-categories, that can become a meal in a kitchen
+    def needs_cooking ; cookable.select {|f| !f.edible_raw? } ; end # just the items, across sub-categories, that need a kitchen to become food
   end
   class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod
     def enable ; raise "Not functional, doesn't enable entries" end
