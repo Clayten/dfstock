@@ -7,19 +7,19 @@ module DFStock
 
   module Comparators
     def reaction_products ms = materials
-      Hash[
-        *ms = ms.map {|m|
-          r = m.reaction_product
-          r.id.each_with_index.map {|x,i|
-            mt, mi = r.material.mat_type[i], r.material.mat_index[i]
-            m = self.class.material_info(mt, mi).material
-            [x, m]
-          }
-        }.inject(&:+).flatten
-      ]
+      rps = ms.map {|m|
+        r = m.reaction_product
+        r.id.each_with_index.map {|x,i|
+          mt, mi = r.material.mat_type[i], r.material.mat_index[i]
+          m = self.class.material_info(mt, mi).material
+          [x.to_sym, m]
+        }
+      }.inject(&:+)
+      rps.flatten! if rps
+      Hash[*rps]
     end
 
-    def reaction_class ms = materials ; [*ms].map {|m| m.reaction_class.to_a }.flatten.sort.uniq end
+    def reaction_class ms = materials ; [*ms].map {|m| m.reaction_class.to_a.map(&:to_sym) }.flatten.sort.uniq end
 
     def food_indexes ms = materials
       ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
@@ -29,14 +29,16 @@ module DFStock
       food_indexes.map {|m,i| [i.keys.first, m] }.inject(Hash.new {|h,k| h[k] = [] }) {|h,(k,m)| h[k] << m ; h }
     end
 
-    def  tile_color     ; material.tile_color  if material end
-    def build_color     ; material.build_color if material end
-    def basic_color     ; material.basic_color if material end
-    def state_color     ; material.state_color if material end
-    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if material end
+    def value ; material.material_value if has_material? end
+
+    def  tile_color     ; material.tile_color  if has_material? end
+    def build_color     ; material.build_color if has_material? end
+    def basic_color     ; material.basic_color if has_material? end
+    def state_color     ; material.state_color if has_material? end
+    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if has_material? end
     def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
     def color
-      fore, back, bright = tile_color.to_a
+      # fore, back, bright = tile_color.to_a
       fore, bright = basic_color.to_a
       color_definitions[[fore, bright]]
     end
@@ -54,8 +56,8 @@ module DFStock
     end
 
     def adjective ; raw.adjective if raw.respond_to?(:adjective) && !raw.adjective.empty? end
-    def raw_name        ; raw.respond_to?(:name)        ? raw.name          : nil end
-    def raw_name_plural ; raw.respond_to?(:name_plural) ? raw.name_plural   : raw_name end
+    def raw_name        ; has_raw? && raw.respond_to?(:name)        ? raw.name          : nil end
+    def raw_name_plural ; has_raw? && raw.respond_to?(:name_plural) ? raw.name_plural   : raw_name end
 
     def active_flags ms
       ms = [*ms]
@@ -76,7 +78,7 @@ module DFStock
       active_flags([raw])
     end
     def raw_base_flags
-      return {} unless has_raw?
+      return {} unless has_raw? && raw.respond_to?(:base_flags)
       raw.base_flags.to_hash.select {|k,v| v }
     end
     def raw_props_flags
@@ -90,12 +92,13 @@ module DFStock
   end
 
   module BuiltinComparators
-    def is_glass? ; material_flags[:IS_GLASS] end
+    def is_glass? ; has_material? && material_flags[:IS_GLASS] end
   end
 
   module PlantComparators
     def mat_mill       ; materials.find {|m| m.id == 'MILL' } end
     def mat_drink      ; materials.find {|m| m.id == 'DRINK' } end
+    def mat_mead       ; materials.find {|m| m.id == 'MEAD'  } end
     def mat_wood       ; materials.find {|m| m.id == 'WOOD' } end
     def mat_seed       ; materials.find {|m| m.id == 'SEED' } end
     def mat_leaf       ; materials.find {|m| m.id == 'LEAF' } end
@@ -103,21 +106,23 @@ module DFStock
     def mat_paper      ; materials.find {|m| m.reaction_class.any? {|r| r.to_s =~ /PAPER/ } } end
     def mat_structural ; materials.find {|m| m.id == 'STRUCTURAL' } end
 
+    def mat_alcohol    ; mat_drink || mat_mead end
+
     def mill?       ; !!mat_mill end
-    def drink?      ; !!mat_drink end
+    def drink?      ; !!(mat_drink || mat_mead) end
     def wood?       ; !!mat_wood end
     def seed?       ; !!mat_seed end
     def leaf?       ; !!mat_leaf end
     def thread?     ; !!mat_thread end
     def structural? ; !!mat_structural end
 
-    # FIXME these are wrong for category-based classes
-    def edible_cooked?  ; material_flags(material)[:EDIBLE_COOKED] end
-    def edible_raw?     ; material_flags(material)[:EDIBLE_RAW] end
-    def edible?         ; edible_cooked? || edible_raw? end
-    def alcohol_producing? ; has_material? && material_flags[:ALCOHOL_PLANT] end
-    def brewable?       ;  alcohol_producing? && !%w(DRINK SEED MILL).include?(material.id) end
-    def millable?       ; mill? end
+    def edible_cooked?     ; material_flags(material)[:EDIBLE_COOKED] end
+    def edible_raw?        ; material_flags(material)[:EDIBLE_RAW] end
+    def edible?            ; edible_cooked? || edible_raw? end
+
+    def alcohol_producing? ; !!reaction_products[:DRINK_MAT] end
+    def brewable?          ; alcohol_producing? && !%w(DRINK SEED MILL).include?(material.id) end
+    def millable?          ; mill? end
 
     def tree? ; raw_flags[:TREE] if has_raw? end
 
@@ -129,7 +134,7 @@ module DFStock
     def growth_ids ; growths.map(&:id) end
     def grows_fruit? ; growth_ids.include? 'FRUIT' end
     def grows_bud?   ; growth_ids.include? 'BUD' end
-    def grows_leaf?  ; growth_ids.include? 'LEAVES' end # FIXME: Does this mean edible leaf? Add another check?
+    def grows_leaf?  ; growth_ids.include? 'LEAVES' end
 
     def winter? ; raw_flags[:WINTER] end
     def spring? ; raw_flags[:SPRING] end
@@ -147,13 +152,26 @@ module DFStock
     end
 
     # Finds male and female of egg-laying species
-    def lays_eggs?        ; cache(:eggs,          index) { raw.caste.any? {|c| c.flags.to_hash[:LAYS_EGGS] } } end
+    def lays_eggs?        ; cache(:eggs,          index) {    castes.any? {|c| c.flags[:LAYS_EGGS] } } end
 
-    def grazer?           ; cache(:grazer,        index) { raw.caste.any? {|c| c.flags.to_hash[:GRAZER] } } end
+    def grazer?           ; cache(:grazer,        index) {    castes.any? {|c| c.flags[:GRAZER] } } end
     def produces_honey?   ; cache(:honey,         index) { materials.any? {|mat| mat.reaction_product.str.flatten.include? 'HONEY' } } end
     def provides_leather? ; cache(:leather,       index) { materials.any? {|mat| mat.id == 'LEATHER' } } end
 
+    def castes
+      return [] unless has_raw? && raw.respond_to?(:caste)
+      raw.caste
+    end
+    def caste
+      idx =
+        if @caste_index                ; @caste_index
+        elsif respond_to? :caste_index ;  caste_index
+        else                           ;  0
+        end
+      castes[idx]
+    end
     def caste_symbol
+      return unless caste
       {'QUEEN'   => '♀', 'FEMALE' => '♀', 'SOLDIER' => '♀', 'WORKER' => '♀',
        'KING'    => '♂',   'MALE' => '♂', 'DRONE' => '♂',
        'DEFAULT' => '?'
