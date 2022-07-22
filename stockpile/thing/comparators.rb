@@ -19,6 +19,8 @@ module DFStock
       ]
     end
 
+    def reaction_class ms = materials ; [*ms].map {|m| m.reaction_class.to_a }.flatten.sort.uniq end
+
     def food_indexes ms = materials
       ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
     end

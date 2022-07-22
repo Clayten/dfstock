@@ -118,7 +118,15 @@ module DFStock
     def has_raw?      ; !!(@raw      || raw      rescue false) end
     def has_material? ; !!(@material || material rescue false) end
 
-    def materials ; ms = has_raw? ? raw.material : material ; [*ms] end
+    def materials
+      ms =
+        if has_raw? && raw.respond_to?(:material)
+          raw.material
+        elsif respond_to?(:material)
+          material
+        end
+      [*ms]
+    end
 
     def active_flags ms
       ms = [*ms]
