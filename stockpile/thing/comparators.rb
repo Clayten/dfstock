@@ -56,10 +56,37 @@ module DFStock
     def adjective ; raw.adjective if raw.respond_to?(:adjective) && !raw.adjective.empty? end
     def raw_name        ; raw.respond_to?(:name)        ? raw.name          : nil end
     def raw_name_plural ; raw.respond_to?(:name_plural) ? raw.name_plural   : raw_name end
-    def raw_flags       ; raw.respond_to?(:flags)       ? raw.flags.a       : [] end
-    def raw_base_flags  ; raw.respond_to?(:base_flags)  ? raw.base_flags.a  : [] end
-    def raw_props_flags ; raw.respond_to?(:props)       ? raw.props.flags.a : [] end
-    def raw_strings     ; raw.respond_to?(:raw_strings) ? raw.raw_strings   : [] end
+
+    def active_flags ms
+      ms = [*ms]
+      Hash[ms.map {|x|
+        x.respond_to?(:flags) ? x.flags : {}
+      }.inject({}) {|a,b|
+        a.merge Hash[b.to_hash.select {|k,v| v }]
+      }.sort_by {|k,v|
+        k.to_s
+      }]
+    end
+    def material_flags ms = nil
+      return {} unless has_material?
+      active_flags(ms || materials)
+    end
+    def raw_flags
+      return {} unless has_raw?
+      active_flags([raw])
+    end
+    def raw_base_flags
+      return {} unless has_raw?
+      raw.base_flags.to_hash.select {|k,v| v }
+    end
+    def raw_props_flags
+      return {} unless has_raw? && raw.respond_to?(:props)
+      raw.props.flags.to_hash.select {|k,v| v }
+    end
+    def raw_strings
+      return [] unless has_raw? && raw.respond_to?(:raw_strings)
+      raw.raw_strings
+    end
   end
 
   module BuiltinComparators

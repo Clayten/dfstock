@@ -128,26 +128,6 @@ module DFStock
       [*ms]
     end
 
-    def active_flags ms
-      ms = [*ms]
-      Hash[ms.map {|x|
-        x.respond_to?(:flags) ? x.flags : {}
-      }.inject({}) {|a,b|
-        a.merge Hash[b.to_hash.select {|k,v| v }]
-      }.sort_by {|k,v|
-        k.to_s
-      }]
-    end
-    def mfah ; materials.inject({}) {|h,m| h[m.id] = active_flags m ; h } end
-    def material_flags ms = nil
-      return {} unless has_material?
-      active_flags(ms || materials)
-    end
-    def raw_flags
-      return {} unless has_raw?
-      active_flags([raw])
-    end
-
     # Instead of an inheritance-based class structure this finds each class that wraps the same data and the index-number it uses
     def references
       id = [:references, *(([:raw, raw._memaddr]          if raw) ||
