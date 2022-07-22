@@ -2,13 +2,16 @@ require 'thing'
 
 module DFStock
   class Plant < Thing
-    from_category :Plants
+    from_raws(:plant) { true }
     def token ; title_case raw.name end
     def link_index ; index end
   end
 
-  class PlantProduct < Thing
+  class PlantProduct < Thing # The 'plants' stock category, just the crops
     from_raws(:plant, &:crop?)
+    # PlantProduct needs to be defined from raws but it should behave as a single-material-item like from_category
+    def materials ; [material] end
+
     def token ; title_case raw.name end
     def link_index ; plant_index end
   end
