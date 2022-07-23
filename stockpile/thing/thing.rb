@@ -106,11 +106,11 @@ module DFStock
     def self.[] n
       n = n.source if n.respond_to? :source
       t = Regexp.new n, Regexp::IGNORECASE
-      instances.select {|i| i.token =~ t }
+      instances.select {|i| i.name =~ t }
     end
 
     # Base methods
-    def token ; 'NONE' end
+    def name ; 'NONE' end
 
     def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
     def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
@@ -147,7 +147,7 @@ module DFStock
     end
     def to_s
       refs = references.map {|sc, idx| next if sc == self.class ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
-      "#{self.class.name} token=#{token.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
+      "#{self.class.name} name=#{name.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
       "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
     end
     def inspect ; "#<#{to_s}>" rescue super end

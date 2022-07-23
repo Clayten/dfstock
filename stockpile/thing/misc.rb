@@ -5,13 +5,13 @@ require 'creature'
 module DFStock
   class Furniture < Thing
     from_list DFHack::FurnitureType::NUME.keys
-    def token ; type.to_s.sub(/_/,' ').downcase end
+    def name ; type.to_s.sub(/_/,' ').downcase end
   end
 
   class MiscLiquid < Thing
     from_list [materials_builtin[11], raws_inorganic[33].material]
     def material ; type end
-    def token ; material.state_name[:Liquid] end
+    def name ; material.state_name[:Liquid] end
   end
 
   class AmmoOtherMaterial < Thing
@@ -27,7 +27,7 @@ module DFStock
         Creature.new(0).materials[21] # Soap
       ]
     def material ; type end
-    def token ; title_case material.id end
+    def name ; title_case material.id end
   end
 
   class BlockOtherMaterial < Thing

@@ -91,7 +91,7 @@ module DFStock
         def self.types_index ; cache([:type_index, self]) { Hash[*types.each_with_index.map {|t,i| [t,i] }.flatten] } end
 
         def type ; @type || self.class.types[index] end
-        def token ; type end
+        def name ; type end
       TXT
     end
   end

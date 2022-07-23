@@ -187,8 +187,8 @@ if self.class.const_defined? :DFHack
           brewable = food.respond_to?(:brewable?) && food.brewable?
           food.set(food.edible_cooked? && !brewable)
         }
-        food.glob_fat.each {|fat| fat.set(fat.token =~ /Tallow/) } # Leave the fat for the prep kitchen
-        food.liquid_animal.each {|extract| extract.set(extract.token =~ /(Milk|Honey|Jelly)$/i && extract.token !~ /Dwarven/i) }
+        food.glob_fat.each {|fat| fat.set(fat.name =~ /Tallow/) } # Leave the fat for the prep kitchen
+        food.liquid_animal.each {|extract| extract.set(extract.name =~ /(Milk|Honey|Jelly)$/i && extract.name !~ /Dwarven/i) }
         food.seeds.each(&:disable) # technically cookable, but wasteful without proper management
         food.drink_plant.each(&:disable)
         food.drink_animal.each(&:disable)
@@ -204,7 +204,7 @@ if self.class.const_defined? :DFHack
         self.max_wheelbarrows = 0
         food.all_other_categories.each &:disable
         food.block_all
-        food.glob_fat.each {|fat| fat.set(fat.token =~ /Fat/) } # Turn fat into tallow
+        food.glob_fat.each {|fat| fat.set(fat.name =~ /Fat/) } # Turn fat into tallow
         if !check_for_link 'Prep Kitchen', type: :workshop
           puts "Prep kitchen stockpile should be linked to a kitchen named 'Prep Kitchen'."
         end
@@ -230,8 +230,8 @@ if self.class.const_defined? :DFHack
         self.max_wheelbarrows = 0
         furniture.all_other_categories.each &:disable
         furniture.type.each &:disable
-        furniture.type.find {|f| f.token == 'Barrel' }.enable
-        furniture.type.find {|f| f.token == 'Food Storage' }.enable # Large Pots
+        furniture.type.find {|f| f.name == 'Barrel' }.enable
+        furniture.type.find {|f| f.name == 'Food Storage' }.enable # Large Pots
         if !check_for_link 'Brewery', type: :workshop
           puts "Brewery barrels stockpile should be linked to a Still named 'Brewery'."
         end

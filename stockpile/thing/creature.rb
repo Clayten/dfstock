@@ -4,20 +4,20 @@ module DFStock
 
   class Creature < Thing
     from_raws(:creature) { true }
-    def token ; title_case (caste ? caste.caste_name.first : raw.name[1]) end
+    def name ; title_case (caste ? caste.caste_name.first : raw.name[1]) end
   end
 
   # The stockpile 'Animal' class, not all creatures
   class Animal < Thing
     from_raws(:creature) {|x| x.is_stockpile_animal? }
     # If the name is capitalized already, leave it. Otherwise, capitalize the first word. Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
-    def token ; n = (caste ? caste.caste_name.first : raw.name[1]) ; n =~ /[A-Z]/ ? n : n.capitalize end
+    def name ; n = (caste ? caste.caste_name.first : raw.name[1]) ; n =~ /[A-Z]/ ? n : n.capitalize end
     def link_index ; creature_index end
   end
 
   class Meat < Thing
     from_category :Meat
-    def token ; "#{(caste ? caste.caste_name.first : material.prefix)}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
+    def name ; "#{(caste ? caste.caste_name.first : material.prefix)}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
   end
 
   class Fish < Thing
@@ -28,7 +28,7 @@ module DFStock
 
     def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
-    def token ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
+    def name ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
   end
 
   class UnpreparedFish < Thing
@@ -39,7 +39,7 @@ module DFStock
 
     def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
-    def token ; title_case "Unprepared Raw #{caste.caste_name.first}, #{caste_symbol}" end
+    def name ; title_case "Unprepared Raw #{caste.caste_name.first}, #{caste_symbol}" end
   end
 
   class Egg < Thing
@@ -49,53 +49,53 @@ module DFStock
     def self.materials ; cache([:materials, self]) { raws.map {|r| r.material.find {|m| m.id =~  /YOLK/i } } } end
 
     def caste_index ; castes.index {|c| c.flags[:LAYS_EGGS] } end
-    def token ; title_case (caste.caste_name.first + ' egg') end
+    def name ; title_case (caste.caste_name.first + ' egg') end
   end
 
   class CreatureDrink < Thing
     from_category :CreatureDrink
     def caste_index ; castes.index {|c| c.caste_id == 'WORKER' } end
-    def token ; title_case "#{material.state_name[:Liquid]}" end
+    def name ; title_case "#{material.state_name[:Liquid]}" end
   end
 
   class CreatureCheese < Thing
     from_category :CreatureCheese
     def caste_index ; castes.index {|c| c.flags[:MILKABLE] } end
-    def token ; title_case "#{material.state_name[:Solid]}" end
+    def name ; title_case "#{material.state_name[:Solid]}" end
   end
 
   class CreaturePowder < Thing
     from_category :CreaturePowder
-    def token ; "#{material.state_name[:Solid]}" end
+    def name ; "#{material.state_name[:Solid]}" end
   end
 
   class Silk < Thing
     from_category :Silk
-    def token ; title_case(raw.respond_to?(:name) ? "#{raw.name.first} Silk" : material.state_name[:Solid]) end
+    def name ; title_case(raw.respond_to?(:name) ? "#{raw.name.first} Silk" : material.state_name[:Solid]) end
   end
 
   class Yarn < Thing
     from_category :Yarn
-    def token ; title_case "#{raw.name.first} #{material.state_name[:Solid]}" end
+    def name ; title_case "#{raw.name.first} #{material.state_name[:Solid]}" end
   end
 
   class Fat < Thing
     from_category :Glob
-    def token ; "#{raw.name.first} #{material.id.downcase}" end
+    def name ; "#{raw.name.first} #{material.id.downcase}" end
   end
 
   class CreatureExtract < Thing
     from_category :CreatureLiquid
-    def token ; title_case "#{material.prefix} #{material.state_name[:Liquid]}".strip end
+    def name ; title_case "#{material.prefix} #{material.state_name[:Liquid]}".strip end
   end
 
   class Leather < Thing
     from_category :Leather
-    def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]}") end
+    def name ; title_case("#{raw.name.first} #{material.state_name[:Solid]}") end
   end
 
   class Parchment < Thing
     from_category :Parchment
-    def token ; title_case("#{raw.name.first} #{material.state_name[:Solid]} Sheet") end
+    def name ; title_case("#{raw.name.first} #{material.state_name[:Solid]} Sheet") end
   end
 end
