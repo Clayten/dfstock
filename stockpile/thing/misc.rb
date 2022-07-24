@@ -56,6 +56,10 @@ module DFStock
     from_list ['chains', 'flasks', 'goblets', 'musical instruments', 'toys', 'armor', 'footwear', 'headwear',
                'handwear', 'figurines', 'amulets', 'scepters', 'crowns', 'rings', 'earrings', 'bracelets',
                'large gems', 'totems', 'legwear', 'backpacks', 'quivers', 'splints', 'crutches', 'tools', 'codices']
+
+    # FIXME
+    def self.index_translation ; [10, 11, 12, 13, 14, 25, 26, 28, 29, 35, 36, 37, 39, 40, 41, 42, 43, 58, 59, 60, 61, 81, 82, 85, 88] end
+    def link_index ; self.class.index_translation[index] end
   end
 
   class Refuse < Thing
