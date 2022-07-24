@@ -345,12 +345,10 @@ if self.class.const_defined? :DFHack
     def - other
       other_items = other.enabled
       enabled.each_with_index.map {|e, i|
-        break if i > 20
-        o - other_items[i]
+        o = other_items[i]
         r = e && !o
-        p [i,e,o,r]
         e if r
-      }
+      }.compact
     end
 
     def set_enabled list
