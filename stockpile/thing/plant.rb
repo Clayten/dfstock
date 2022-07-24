@@ -4,7 +4,6 @@ module DFStock
   class Plant < Thing
     from_raws(:plant) { true }
     def name ; title_case raw.name end
-    def link_index ; index end
   end
 
   class PlantProduct < Thing # The 'plants' stock category, just the crops
@@ -12,8 +11,8 @@ module DFStock
     # PlantProduct needs to be defined from raws but it should behave as a single-material-item like from_category
     def materials ; [material] end
 
-    def name ; title_case raw.name end
     def link_index ; plant_index end
+    def name ; title_case raw.name end
   end
 
   class PlantDrink < Thing
