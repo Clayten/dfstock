@@ -68,15 +68,15 @@ module DFStock
           end
           klass.send(:define_method, desired_name) {|&b|
             flags_array = send base_name
-            # list = stockklass.index_translation # This is the reason this is a consistent class method
-            list = stockklass.respond_to?(:index_translation) ? stockklass.index_translation : (0...stockklass.num_instances).to_a
-            array = list.each_with_index.map {|_, idx|
-              stockklass.new idx, link: flags_array
+            array = stockklass.num_instances.times.map {|idx|
+              stockklass.new idx, link: flags_array, category_name: stock_category_name, subcategory_name: desired_name
             }
-            # raise "Array of instances should not be empty!" if array.empty? # FIXME Will this fail on PlantCheese? # Yes, and on inactive categories!
-            # raise "Flags array should not be empty!" if flags_array.empty?
-            $fa = flags_array
-            # p [:in_define_method, desired_name, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
+
+            # p [:in_define_method, desired_name, :from, self, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
+
+            raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
+            # puts "WARNING: #{stockklass.to_s.split('::').last} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
+
             def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
             array
           }

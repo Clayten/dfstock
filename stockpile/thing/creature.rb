@@ -4,6 +4,7 @@ module DFStock
 
   class Creature < Thing
     from_raws(:creature) { true }
+    def token ; "CREATURE:#{raw_token}:#{material_token}" end
     def name ; title_case (caste ? caste.caste_name.first : raw.name[1]) end
   end
 
@@ -11,12 +12,14 @@ module DFStock
   class Animal < Thing
     from_raws(:creature) {|x| x.is_stockpile_animal? }
     # If the name is capitalized already, leave it. Otherwise, capitalize the first word. Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
+    def token ; raw_token end
     def name ; n = (caste ? caste.caste_name.first : raw.name[1]) ; n =~ /[A-Z]/ ? n : n.capitalize end
     def link_index ; creature_index end
   end
 
   class Meat < Thing
     from_category :Meat
+    def token ; "#{raw.class == DFHack::CreatureRaw ? 'CREATURE' : 'PLANT'}:#{raw_token}:#{material_token}" end
     def name ; "#{(caste ? caste.caste_name.first : material.prefix)}#{" #{material.meat_name[2]}" if material.meat_name[2] && !material.meat_name[2].empty?} #{material.meat_name.first}" end
   end
 
@@ -28,6 +31,7 @@ module DFStock
 
     def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
+    def token ; super + ":#{caste_index.zero? ? 'FEMALE' : 'MALE'}" end
     def name ; title_case "#{caste.caste_name.first}, #{caste_symbol}" end
   end
 
@@ -39,6 +43,7 @@ module DFStock
 
     def materials ; raw.material end
     def caste_index ; self.class.types[index].last end
+    def token ; super + ":#{caste_index.zero? ? 'FEMALE' : 'MALE'}" end
     def name ; title_case "Unprepared Raw #{caste.caste_name.first}, #{caste_symbol}" end
   end
 
@@ -49,6 +54,7 @@ module DFStock
     def self.materials ; cache([:materials, self]) { raws.map {|r| r.material.find {|m| m.id =~  /YOLK/i } } } end
 
     def caste_index ; castes.index {|c| c.flags[:LAYS_EGGS] } end
+    def token ; "#{raw_token}:#{caste_index.zero? ? 'FEMALE' : 'MALE'}" end
     def name ; title_case (caste.caste_name.first + ' egg') end
   end
 

@@ -112,6 +112,23 @@ module DFStock
     # Base methods
     def name ; 'NONE' end
 
+    def raw_token
+      return unless has_raw?
+      raw.class == DFHack::CreatureRaw ? raw.creature_id : raw.id
+    end
+    def material_token
+      return unless has_material?
+      material.id.empty? ? material.state_name.first : material.id
+    end
+    def token
+      if    raw_token && material_token && !material_token.empty? ; "#{raw_token}:#{material_token}"
+      elsif raw_token                                             ; "#{raw_token}"
+      elsif              material_token && !material_token.empty? ; "#{material_token}"
+      elsif respond_to?(:type) && type                            ; "#{type}"
+      end
+    end
+    def pathname ; "#{@category_name},#{@subcategory_name},#{token}".upcase.gsub(/\s/,'_') end
+
     def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
     def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
 
@@ -134,8 +151,9 @@ module DFStock
                           ([:material, material._memaddr] if material) ||
                           ([:type, type]                  if respond_to?(:type)))]
       cache(id) {
+        r = m = t = nil
         Thing.subclasses.map {|sc|
-          r = m = t = nil
+          # p [:ref, :id, id, :sc, sc, !!r, !!m, !!t]
           next unless idx =
             if    sc.respond_to? :raws_index                         ;      sc.raws_index[(r ||= raw      ; r._memaddr if r)]
             elsif sc.respond_to? :materials_index                    ; sc.materials_index[(m ||= material ; m._memaddr if m)]
