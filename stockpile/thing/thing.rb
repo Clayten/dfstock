@@ -99,15 +99,19 @@ module DFStock
     def set x ; check_index ; link[link_index] = !!x end
     def get   ; check_index ; link[link_index] end
     def  enabled? ; !!(get rescue false) end
+    def disabled? ; !enabled? end
     def  enable   ; set true end
     def disable   ; set false end
     def  toggle   ; set !enabled? end
 
-    def self.[] n
+    def self.lookup_by_name n
       n = n.source if n.respond_to? :source
       t = Regexp.new n, Regexp::IGNORECASE
       instances.select {|i| i.name =~ t }
     end
+    def self.[] n ; self.lookup_by_name n end
+
+    def self.token_index ; cache([:token_index, self]) { Hash[*instances.map(&:token).each_with_index.map {|t,i| [t, i] }.flatten] } end
 
     # Base methods
     def name ; 'NONE' end

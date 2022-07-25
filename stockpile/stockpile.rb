@@ -59,9 +59,9 @@ module DFStock
 
   module RefuseMod
     extend Scaffold
-    add_flag( :fresh_raw_hide)
-    add_flag(:rotten_raw_hide)
-  # add_array(Refuse, :type)
+    # add_flag( :fresh_raw_hide)
+    # add_flag(:rotten_raw_hide)
+    # add_array(Refuse, :type) # FIXME - Not functional
     add_array(Animal, :corpses)
     add_array(Animal, :body_parts)
     add_array(Animal, :skulls)
@@ -91,7 +91,7 @@ module DFStock
 
   module CoinMod
     extend Scaffold
-    # add_array(Metal, :mats, :metals) # NOTE: Seems bugged, should just be metals, right...?
+    add_array(Inorganic, :mats, :materials)
   end
 
   module BarsBlocksMod
@@ -224,6 +224,14 @@ module DFStock
 
     def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
 
+    def find_by_token path_or_subcat, token = nil
+      if token ;    subcat        = path_or_subcat
+      else     ; _, subcat, token = path_or_subcat.split(',').map(:to_sym)
+      end
+      raise "No such subcategory #{subcat}" unless respond_to? subcat
+      send(subcat).find {|x| x.token == token }
+    end
+
     def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
     def inspect ; "#<#{to_s}>" end
   end
@@ -247,6 +255,7 @@ if self.class.const_defined? :DFHack
   class DFHack::StockpileSettings_TCorpse        ; include DFStock::StockFinder
     def _memaddr ; hash end # Fake, just to identify the same instance
     def arrays ; {} end # No arrays of items
+    def enable ; raise "Not functional" end
   end
   class DFHack::StockpileSettings_TRefuse        ; include DFStock::StockFinder, DFStock::RefuseMod
     def enable ; raise "Not functional, crashes" end
@@ -297,7 +306,7 @@ if self.class.const_defined? :DFHack
         Animals: 'animals',
         Food: 'food',
         Furniture: 'furniture',
-        Corpse: 'corpses',
+        # Corpse: 'corpses', # Non-functional, so don't iterate over it
         Refuse: 'refuse',
         Stone: 'stone',
         Ammo: 'ammo',
@@ -336,19 +345,26 @@ if self.class.const_defined? :DFHack
 
     def all_items ; categories.map {|_,c| c.all_items }.flatten end
 
-    def enabled ; all_items.map {|i| i if i.linked? && i.enabled? } end
+    def enabled ; all_items.select {|i| i.linked? && i.enabled? } end
 
     # WARNING: Only items, not other settings
     def == o ; enabled == o.enabled end
 
     # Our items minus the other pile's items
     def - other
-      other_items = other.enabled
-      enabled.each_with_index.map {|e, i|
-        o = other_items[i]
-        r = e && !o
-        e if r
-      }.compact
+      all_items.zip(other.all_items).select {|s,o|
+        se = s.linked? && s.enabled?
+        oe = o.linked? && o.enabled?
+        se && !oe
+      }.map(&:first)
+    end
+
+    def + other
+      all_items.zip(other.all_items).select {|s,o|
+        se = s.linked? && s.enabled?
+        oe = o.linked? && o.enabled?
+        se || oe
+      }.map(&:first)
     end
 
     def set_enabled list
@@ -356,8 +372,16 @@ if self.class.const_defined? :DFHack
       all_items.each_with_index {|item,i| item.set !!list[i] }
     end
 
+    def find_by_pathname path_or_cat, subcat = nil, token = nil
+      cat, subcat, token = path_or_cat.split(',') unless subcat
+      cat, subcat = [cat, subcat].map(&:downcase)
+      raise "No such category #{      cat}" unless    respond_to?    cat
+      send(cat).find_by_token subcat, token
+    end
+
     def status
-      puts "Allow Organics: #{allow_organic}. Allow Inorganics: #{allow_inorganic}"
+      puts "StockSelection:"
+      puts "\tAllow Organics: #{allow_organic}.\n\tAllow Inorganics: #{allow_inorganic}"
 
       categories.each {|k, c|
         puts "#{'%20s' % k} #{c.enabled?}"
@@ -390,6 +414,7 @@ if self.class.const_defined? :DFHack
     def allow_inorganic     ; settings.allow_inorganic end
     def allow_inorganic= b  ; settings.allow_inorganic= b end
     def stock_flags         ; settings.flags end # renamed to avoid conflict
+
     def animals             ; settings.animals end
     def food                ; settings.food end
     def furniture           ; settings.furniture end
@@ -407,7 +432,13 @@ if self.class.const_defined? :DFHack
     def armor               ; settings.armor end
     def sheet               ; settings.sheet end
 
+    def find_by_pathname *a ; settings.find_by_pathname *a end
+    def categories          ; settings.categories end
     def all_items           ; settings.all_items end
+    def enabled             ; settings.enabled end
+    def == o                ; settings == o end
+    def - o                 ; settings - o end
+    def + o                 ; settings + o end
   end
 
 
@@ -450,7 +481,6 @@ if self.class.const_defined? :DFHack
       puts "Outgoing Workshop Links: #{links.give_to_workshop.length} - #{
         links.give_to_workshop.map   {|w| [w.type,w.name].reject(&:empty?).join(':') }.join(', ')}"
 
-      puts "StockSelection:"
       settings.status
 
       true
