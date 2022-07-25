@@ -39,7 +39,7 @@ module DFStock
       mc.define_method("discriminator") { discriminator }
       class_eval(<<~TXT, __FILE__, __LINE__ + 1)
         def self.materials ; cache([:materials, self]) { materials_builtin.select {|m| i = new(material: m) ; discriminator[i] } } end
-        def self.materials_index ; cache([:mat_index, self]) { Hash[*materials.each_with_index.map {|m,i| [m._memaddr, i] }.flatten] } end
+        def self.materials_index ; cache([:mat_index, self]) { Hash[*materials.each_with_index.map {|m,i| [m._memaddr, i] }.reverse.flatten] } end
 
         def raw ; nil end
         def material
@@ -59,7 +59,7 @@ module DFStock
       mc.define_method("discriminator") { discriminator }
       class_eval(<<~TXT, __FILE__, __LINE__ + 1)
         def self.raws ; cache([:raws, self]) { raws_#{type}.select {|r| $r = r ; i = new(raw: r) ; discriminator[i] } } end
-        def self.raws_index ; cache([:raw_index, self]) { Hash[*raws.each_with_index.map {|r,i| [r._memaddr, i] }.flatten] } end
+        def self.raws_index ; cache([:raw_index, self]) { Hash[*raws.each_with_index.map {|r,i| [r._memaddr, i] }.reverse.flatten] } end
       TXT
     end
 
@@ -72,11 +72,11 @@ module DFStock
         def self.infos     ; cache([:infos,     self]) { types.map {|t,i| material_info t, i } } end
         def self.raws      ; cache([:raws,      self]) { infos.map {|i| i.send(i.mode.downcase) } } end
         def self.materials ; cache([:materials, self]) { infos.map &:material } end
-        def self.materials_index ; cache([:mat_index, self]) { Hash[*materials.each_with_index.map {|m,i| [m._memaddr, i] }.flatten] } end
+        def self.raws_index ; cache([:raw_index, self]) { Hash[*raws.each_with_index.map {|r,i| [r._memaddr, i] }.reverse.flatten] } end
 
-        def material  ; @material || self.class.materials[index] end
+        def material  ; @material || (@raw.material.first if @raw) || self.class.materials[index] end
 
-        # The categories generally list specific materials, and the other raw materials are a distraction
+        # The categories generally list specific materials, and the other materials are a distraction
         def materials ; [material] end
       TXT
     end

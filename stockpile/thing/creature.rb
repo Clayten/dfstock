@@ -12,7 +12,7 @@ module DFStock
   class Animal < Thing
     from_raws(:creature) {|x| x.is_stockpile_animal? }
     # If the name is capitalized already, leave it. Otherwise, capitalize the first word. Needs to match 'Toad Men' and 'Giant lynx' and 'Protected Helpers'
-    def token ; raw_token end
+    def material_token ; nil end
     def name ; n = (caste ? caste.caste_name.first : raw.name[1]) ; n =~ /[A-Z]/ ? n : n.capitalize end
     def link_index ; creature_index end
   end
