@@ -21,6 +21,7 @@ module DFStock
   class Gem < Thing
     from_raws(:inorganic, &:is_gem?)
     def name ; material.gem_name2 == 'STP' ? "#{material.gem_name1}s" : material.gem_name2 end
+    def link_index ; inorganic_index end
   end
 
   class CutStone < Thing

@@ -42,9 +42,6 @@ module DFStock
     def included klass
       # p [:included, :self, self, :into, klass, :features, @features.length, @features]
 
-      # FIXME Change add method to take class as an argument, not hidden in a block
-      # then query the class's index_translation table for size, rather than the
-      # base array of flags.
       flags = []
       arrays = []
       @features.each {|type, actual_name, desired_name, stockklass|
@@ -55,11 +52,11 @@ module DFStock
           # p [:define_flag, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
             # reader
-            klass.class_eval "alias #{base_name}     #{actual_name}",  __FILE__, __LINE__
-            klass.class_eval "alias #{desired_name}  #{base_name}",    __FILE__, __LINE__
+            klass.class_eval "alias    #{base_name}  #{actual_name}",  __FILE__, __LINE__
+            klass.class_eval "alias #{desired_name}    #{base_name}",  __FILE__, __LINE__
             # writer
-            klass.class_eval "alias #{base_name}=    #{actual_name}=", __FILE__, __LINE__
-            klass.class_eval "alias #{desired_name}= #{base_name}=",   __FILE__, __LINE__
+            klass.class_eval "alias    #{base_name}= #{actual_name}=", __FILE__, __LINE__
+            klass.class_eval "alias #{desired_name}=   #{base_name}=", __FILE__, __LINE__
           end
 
         elsif :array == type
@@ -76,7 +73,7 @@ module DFStock
               stockklass.new idx, link: flags_array, category_name: stock_category_name, subcategory_name: desired_name
             }
 
-            # p [:in_define_method, desired_name, :from, self, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
+            p [:in_define_method, desired_name, :from, self, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
 
             raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
             # puts "WARNING: #{stockklass.to_s.split('::').last} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
@@ -100,35 +97,40 @@ module DFStock
       }
 
       features = @features.dup
-      # p [:features, features]
       klass.send(:define_method, :features) { features }
 
+      # Some subcategories have been renamed for consitency, stone.mats to stone.ore, etc. A wrapper is then constructed
+      # at the original name (:mats) to provide existing array-of-booleans functionality for existing scripts.
+      #
+      # A shared wrapper is for a subcategory which has been broken into multiple new categories.
       wrappers = arrays + flags
       wrapper_count = Hash.new {|h,k| h[k] = 0 }
       wrappers.each {|an,dn,bn| wrapper_count[an] += 1 }
       simple_wrappers, shared_wrappers = wrappers.partition {|an, dn, bn| wrapper_count[an] == 1 }
 
       simple_wrappers.each {|actual_name, desired_name, _|
-        # p [:simple_wrapper, :an, actual_name, :dn, desired_name]
         next if actual_name == desired_name
+        p [:simple_wrapper, :an, actual_name, :dn, desired_name]
         klass.class_eval { undef_method actual_name }
         klass.class_eval "alias #{actual_name} #{desired_name}", __FILE__, __LINE__
       }
       shared_wrappers.map {|actual_name, _, _| actual_name}.uniq.each {|actual_name|
         wrapped_methods = wrappers.select {|a,d,_| a == actual_name }.map {|a,d,_| d }
-        # p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
+        p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
         klass.class_eval { undef_method actual_name }
         klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end", __FILE__, __LINE__
       }
 
-      # Print a list of the array names, they're easy to forget
       klass.class_eval(<<~TXT,__FILE__,__LINE__ + 1)
+        # Print a list of the array names, they're easy to forget
         def describe_category
           flags, arrays = features.map {|t,n1,n2,_| [t, (n2 || n1)] }.partition {|t,_| t == :flag }
           puts stock_category_name.to_s + " contains these features:"
           puts "Flags: #{ flags.map  {|_,n| n }.join(', ')}" unless flags.empty?
           puts "Arrays: #{arrays.map {|_,n| n }.join(', ')}" unless arrays.empty?
         end
+
+        # Catch invalid commands and hint at the correct usage
         def method_missing mn, *a ; describe_category ; super ; end
       TXT
     end
