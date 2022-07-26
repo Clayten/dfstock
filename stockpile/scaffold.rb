@@ -68,18 +68,23 @@ module DFStock
             klass.class_eval "alias #{base_name} #{actual_name}", __FILE__, __LINE__
           end
           klass.send(:define_method, desired_name) {|&b|
-            flags_array = send base_name
-            array = stockklass.num_instances.times.map {|idx|
-              stockklass.new idx, link: flags_array, category_name: stock_category_name, subcategory_name: desired_name
-            }
+            # Cache the item array - it must be linked to the flags array so each stock-settings instance must have its own
+            @@instances ||= {}
+            @@instances[[desired_name, _memaddr]] ||=
+            begin
+              flags_array = send base_name
+              array = stockklass.num_instances.times.map {|idx|
+                stockklass.new idx, link: flags_array, category_name: stock_category_name, subcategory_name: desired_name
+              }
 
-            p [:in_define_method, desired_name, :from, self, :on, stockklass, :array_length, array.length, :base_name, base_name, :flags_length, flags_array.length]
+              # p [:in, desired_name, :on, self, :from, stockklass, :base_name, base_name, :array_length, array.length, :flags_length, flags_array.length]
 
-            raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
-            # puts "WARNING: #{stockklass.to_s.split('::').last} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
+              raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
+              # puts "WARNING: #{stockklass} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
 
-            def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
-            array
+              def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
+              array
+            end
           }
 
         else ; raise "Unknown type #{type}" end
@@ -110,13 +115,13 @@ module DFStock
 
       simple_wrappers.each {|actual_name, desired_name, _|
         next if actual_name == desired_name
-        p [:simple_wrapper, :an, actual_name, :dn, desired_name]
+        # p [:simple_wrapper, :an, actual_name, :dn, desired_name]
         klass.class_eval { undef_method actual_name }
         klass.class_eval "alias #{actual_name} #{desired_name}", __FILE__, __LINE__
       }
       shared_wrappers.map {|actual_name, _, _| actual_name}.uniq.each {|actual_name|
         wrapped_methods = wrappers.select {|a,d,_| a == actual_name }.map {|a,d,_| d }
-        p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
+        # p [:shared_wrapper, :an, actual_name, :wm, wrapped_methods]
         klass.class_eval { undef_method actual_name }
         klass.class_eval "def #{actual_name} ; #{wrapped_methods.join(' + ')} end", __FILE__, __LINE__
       }
