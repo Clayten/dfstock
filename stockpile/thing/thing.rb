@@ -9,25 +9,15 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   class Thing
-    # Comparators
-    include          Comparators
-    include     PlantComparators
-    include   BuiltinComparators
-    include  CreatureComparators
-    include InorganicComparators
-
-    # Category Definitions
-    extend   BuiltinCategory
-    extend   OrganicCategory
-    extend InorganicCategory
-    extend  CreatureCategory
-    extend      ItemCategory
-    # Scaffolds
+    include Comparators
+    extend Categories
     extend StockScaffold
 
     def self.format_classname x = nil ; (x || self).to_s.split('::').last.downcase end
     def self.parentclasses    x = nil ; c = x || self ; c.ancestors.select {|x| x.is_a? Class }.select {|x| x.name =~ /DFStock/ } end
     def self.parentclass      x = nil ; pcs = parentclasses(x) ; pcs[1] end
+
+    def self.metaclass ; (class << self ; self end) end
 
 
     # Only called once, at initial class definition - before anonymous class is assigned a name from its constant
@@ -79,7 +69,11 @@ module DFStock
       cache_id = cache_id.first if cache_id.length == 1
       # p [:cache, cache_id, :contained?, internal_cache.include?(cache_id)]
       return internal_cache[cache_id] if internal_cache.include?(cache_id)
-      internal_cache[cache_id] = yield
+      # start_time = Time.now
+      result = internal_cache[cache_id] = yield
+      # duration = Time.now - start_time
+      # puts "Cache[#{cache_id.inspect}] took #{'%1.4f' %duration}s"
+      # result
     end
     def cache *cache_id, &b ; self.class.cache([cache_id, :instance], &b) end
 

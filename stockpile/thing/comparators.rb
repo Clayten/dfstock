@@ -89,13 +89,11 @@ module DFStock
       return [] unless has_raw? && raw.respond_to?(:raw_strings)
       raw.raw_strings
     end
-  end
 
-  module BuiltinComparators
+    # Buitings
     def is_glass? ; has_material? && material_flags[:IS_GLASS] end
-  end
 
-  module PlantComparators
+    # Plants
     def mat_mill       ; materials.find {|m| m.id == 'MILL' } end
     def mat_drink      ; materials.find {|m| m.id == 'DRINK' } end
     def mat_mead       ; materials.find {|m| m.id == 'MEAD'  } end
@@ -141,9 +139,8 @@ module DFStock
     def summer? ; raw_flags[:SUMMER] end
     def autumn? ; raw_flags[:AUTUMN] end
     def crop? ; winter? || spring? || summer? || autumn? end
-  end
 
-  module CreatureComparators
+    # Creatures
     def is_wagon?    ; raw_flags[:EQUIPMENT_WAGON] end
     def is_creature? ; raw.respond_to?(:creature_id) && !is_wagon? end
 
@@ -177,10 +174,8 @@ module DFStock
        'DEFAULT' => '?'
       }[caste.caste_id]
     end
-  end
 
-
-  module InorganicComparators
+    # Inorganics
     def is_gem?   ; material.flags[:IS_GEM] end
     def is_stone? ; material.flags[:IS_STONE] end
     def is_metal? ; material.flags[:IS_METAL] end
