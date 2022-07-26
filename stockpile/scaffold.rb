@@ -54,8 +54,12 @@ module DFStock
           flags << [actual_name, desired_name, base_name]
           # p [:define_flag, :self, self, :klass, klass, :an, actual_name, :bn, base_name, :dn, desired_name]
           if !klass.method_defined? base_name
-            klass.class_eval "alias #{base_name} #{actual_name}", __FILE__, __LINE__
-            klass.class_eval "alias #{desired_name} #{base_name}", __FILE__, __LINE__
+            # reader
+            klass.class_eval "alias #{base_name}     #{actual_name}",  __FILE__, __LINE__
+            klass.class_eval "alias #{desired_name}  #{base_name}",    __FILE__, __LINE__
+            # writer
+            klass.class_eval "alias #{base_name}=    #{actual_name}=", __FILE__, __LINE__
+            klass.class_eval "alias #{desired_name}= #{base_name}=",   __FILE__, __LINE__
           end
 
         elsif :array == type
