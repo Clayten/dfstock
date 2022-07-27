@@ -347,24 +347,39 @@ if self.class.const_defined? :DFHack
 
     def enabled ; all_items.select {|i| i.linked? && i.enabled? } end
 
-    # WARNING: Only items, not other settings
-    def == o ; enabled == o.enabled end
+    def == o
+      (  enabled.map(&:pathname) ==
+       o.enabled.map(&:pathname)) &&
+      (  categories.map {|_,c| c.features.select {|t,*_| t == :flag }.map {|_,n1,n2,_| c.send(n2 || n1) } }.flatten ==
+       o.categories.map {|_,c| c.features.select {|t,*_| t == :flag }.map {|_,n1,n2,_| c.send(n2 || n1) } }.flatten)
+    end
+
+    def copy other
+      other_items = Hash[*other.all_items.select(&:enabled?).map {|o| [o.pathname, true] }.flatten]
+      all_items.each {|i| i.set other_items[i.pathname] }
+      categories.each {|cn,c| c.features.select {|t,*_| t == :flag }.each {|_,n1,n2,_| n = n2 || n1 ; c.send("#{n}=", other.send(cn).send(n)) } }
+      self
+    end
 
     # Our items minus the other pile's items
     def - other
-      all_items.zip(other.all_items).select {|s,o|
+      other_items = Hash[*other.all_items.map {|o| [o.pathname, o] }.flatten]
+      all_items.select {|s|
+        next unless o = other_items[s.pathname]
         se = s.linked? && s.enabled?
         oe = o.linked? && o.enabled?
         se && !oe
-      }.map(&:first)
+      }
     end
 
     def + other
-      all_items.zip(other.all_items).select {|s,o|
+      other_items = Hash[*other.all_items.map {|o| [o.pathname, o] }.flatten]
+      all_items.select {|s|
+        next unless o = other_items[s.pathname]
         se = s.linked? && s.enabled?
         oe = o.linked? && o.enabled?
         se || oe
-      }.map(&:first)
+      }
     end
 
     def set_enabled list
@@ -436,6 +451,7 @@ if self.class.const_defined? :DFHack
     def categories          ; settings.categories end
     def all_items           ; settings.all_items end
     def enabled             ; settings.enabled end
+    def copy                ; settings.copy end
     def == o                ; settings == o end
     def - o                 ; settings - o end
     def + o                 ; settings + o end
