@@ -451,7 +451,7 @@ if self.class.const_defined? :DFHack
     def categories          ; settings.categories end
     def all_items           ; settings.all_items end
     def enabled             ; settings.enabled end
-    def copy                ; settings.copy end
+    def copy o              ; settings.copy o end
     def == o                ; settings == o end
     def - o                 ; settings - o end
     def + o                 ; settings + o end

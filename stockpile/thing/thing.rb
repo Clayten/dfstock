@@ -125,7 +125,7 @@ module DFStock
       elsif respond_to?(:type) && type                            ; "#{type}"
       end
     end
-    def pathname ; "#{@category_name},#{@subcategory_name},#{token}".upcase.gsub(/\s/,'_') end
+    def pathname ; "#{@category_name}|#{@subcategory_name}|#{token}".upcase.gsub(/\s/,'_') end
 
     def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
     def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
