@@ -1,7 +1,3 @@
-require 'thing'
-require 'builtin'
-require 'creature'
-
 module DFStock
   class Furniture < Thing
     from_list DFHack::FurnitureType::NUME.keys

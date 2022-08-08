@@ -1,5 +1,3 @@
-require 'thing'
-
 module DFStock
   class Plant < Thing
     from_raws(:plant) { true }

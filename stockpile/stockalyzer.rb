@@ -1,6 +1,6 @@
 
 module DFStockalyzer
-  extend DwarfFortressUtils::API
+  # extend DwarfFortressUtils::API
   class << self
 
     def find_building_by_id id ; buildings.find {|b| b.id == id } end
@@ -333,6 +333,7 @@ if self.class.const_defined?(:DFHack)
     class HaulingStop
       include Linkable
       def get_links
+        p :gl
         links = Hash.new {|h,k| h[k] = [] }
         stockpiles.each {|link|
           mode = link.mode.give ? :give : :take

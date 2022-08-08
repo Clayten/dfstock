@@ -1,5 +1,3 @@
-require 'thing/thing'
-
 module DFStock
   class Builtin < Thing
     from_builtins { true }

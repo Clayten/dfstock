@@ -1,10 +1,22 @@
-require 'thing'
-require 'inorganic'
-require 'creature'
-require 'plant'
-require 'misc'
-require 'builtin'
-require 'item'
+$LOAD_PATH << File.dirname(__FILE__)
+require 'thing/thing'
+require 'scaffold'
+
+def clear_error_before_loading
+  return if $!.nil?
+  puts "Clearing lingering error message"
+  begin
+    load '~/foo'
+  rescue LoadError => e
+    puts "Rescuing"
+  end
+end
+def rehack # reload all but self
+  clear_error_before_loading
+  return :not_reloading if caller.select {|c| c =~ /rehack/ }.length > 1
+  Dir.glob("#{File.dirname __FILE__}/**/*rb").each {|f| p f ; load f }
+end
+rehack
 
 module DFStock
 
@@ -423,6 +435,7 @@ if self.class.const_defined? :DFHack
   end
 
   module DFHack::StockForwarder
+    def self.included *x ; super end
     # Wrappers to allow the stockpile to be used as the settings object itself.
     def allow_organic       ; settings.allow_organic end
     def allow_organic=   b  ; settings.allow_organic= b end
@@ -458,25 +471,6 @@ if self.class.const_defined? :DFHack
   end
 
 
-  class DFHack::HaulingStop
-    include DFHack::StockForwarder
-
-    def status
-      puts "Trackstop ##{id} - #{name.inspect}"
-
-      links = get_links[:stockpile]
-      give, take = links[:give], links[:take]
-      puts "Incoming Stockpile Links: #{take.length} - #{ take.map(&:name).join(', ')}"
-      puts "Outgoing Stockpile Links: #{give.length} - #{ give.map(&:name).join(', ')}"
-
-      puts "StockSelection:"
-      settings.status
-
-      true
-    end
-  end
-
-
   class DFHack::BuildingStockpilest
     include DFHack::StockForwarder
 
@@ -501,5 +495,120 @@ if self.class.const_defined? :DFHack
 
       true
     end
+
+    def get_links
+      links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
+      links[:stockpile][:give] =        self.links.give_to_pile.to_a
+      links[:stockpile][:take] =        self.links.take_from_pile.to_a
+      links[:workshop ][:give] =        self.links.give_to_workshop.to_a
+      links[:workshop ][:take] =        self.links.take_from_workshop.to_a
+      links
+    end
   end
+
+  class DFHack::HaulingStop
+    include DFHack::StockForwarder
+
+    def status
+      puts "Trackstop ##{id} - #{name.inspect}"
+
+      links = get_links[:stockpile]
+      give, take = links[:give], links[:take]
+      puts "Incoming Stockpile Links: #{take.length} - #{ take.map(&:name).join(', ')}"
+      puts "Outgoing Stockpile Links: #{give.length} - #{ give.map(&:name).join(', ')}"
+      puts "StockSelection:"
+      settings.status
+      true
+    end
+
+    def get_links
+      links = Hash.new {|h,k| h[k] = [] }
+      stockpiles.each {|link|
+        mode = link.mode.give ? :give : :take
+        building = df.world.buildings.all.find {|b| b.id == link.building_id }
+        links[mode] << building
+      }
+      {:stockpile => links}
+    end
+  end
+
+  class DFHack::BuildingWorkshopst
+    def get_links
+      links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
+      links[:stockpile][:give] = getStockpileLinks.give_to_pile.to_a
+      links[:stockpile][:take] = getStockpileLinks.take_from_pile.to_a
+      links
+    end
+  end
+
 end
+
+# FIXME - for rerunning inheritance during testing
+def reinherit ks = nil
+  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
+  # p [:ks, ks]
+  ks.each {|k|
+    kp = k.ancestors[1]
+    # p [:kp, kp, :<=, :k, k]
+    kp.inherited k
+  }
+end
+# Reinherit should not be called unless followed by a reload
+def fullhack ; rehack ; reinherit ; rehack end
+def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
+def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
+
+def buildings ; df.world.buildings.all.select {|x| x.class <= DFHack::Building } end
+def stockpiles
+  # Stockpiles and Trackstops
+  $bs = bs = buildings.select {|x|
+    x.class == DFHack::BuildingStockpilest ||
+    (x.class != DFHack::BuildingTrapst &&
+		  x.respond_to?(:getStockpileLinks) &&
+			x.getStockpileLinks)
+  }
+  # HaulingStops
+  $hs = hs = df.ui.hauling.routes.map {|r| r.stops.to_a }.flatten
+	bs + hs
+end
+def pile_at_cursor
+  c = df.cursor
+  stockpiles.find {|b|
+    # $b = b
+    # p [:b_c, b.class, :b_p, b.respond_to?(:pos), :b_r, b.respond_to?(:room), :b_f, b.respond_to?(:flags)]
+    if b.respond_to? :pos
+      b.pos.z == c.z &&
+        b.pos.x == c.x &&
+        b.pos.y == c.y
+    elsif b.respond_to?(:room) && b.room.extents
+      # p [:stockpile, :c, c, :bz, b.z, :br, b.room]
+      next unless c.z == b.z
+      ox = c.x - b.room.x
+      oy = c.y - b.room.y
+      next if ox < 0 || ox > b.room.width || oy < 0 || oy > b.room.height
+      offset = ox + oy * b.room.width
+      # p [:ox, ox, :oy, oy, :offset, offset, :be, b.room.extents[offset]]
+      b.room.extents[offset] == :Stockpile
+    else
+      # p [:workshop, :c, c, :bz, b.z, :bx, [b.x1, b.x2], :by, [b.y1, b.y2]]
+      b.z == c.z &&
+        b.x1 <= c.x && b.x2 >= c.x &&
+        b.y1 <= c.y && b.y2 >= c.y
+    end
+  }
+end
+
+module DFDebugMethodsEnumerable
+	def to_hash
+		return {} unless _indexenum
+		Hash[each_with_index.map {|v,i|
+			[_indexenum.sym(i), v]
+		}]
+	end
+	def active ; to_hash.select {|k,v| v }.map {|k,v| k }.sort_by(&:to_s) end
+	def a ; active.reject {|k| k.to_s =~ /^BIOME/ } end
+end
+module DFHack::MemHack::Enumerable ; include DFDebugMethodsEnumerable end
+class DFHack::MemHack::StaticArray ; include DFDebugMethodsEnumerable end
+class DFHack::MemHack::DfFlagarray ; include DFDebugMethodsEnumerable end
+module Enumerable ; def to_hash *x, &b ; to_h *x, &b end end

@@ -79,7 +79,7 @@ module DFStock
 
               # p [:in, desired_name, :on, self, :from, stockklass, :base_name, base_name, :array_length, array.length, :flags_length, flags_array.length]
 
-              raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
+              # raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
               # puts "WARNING: #{stockklass} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
 
               def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment

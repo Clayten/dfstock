@@ -1,5 +1,3 @@
-require 'thing'
-
 module DFStock
 
   class Inorganic < Thing

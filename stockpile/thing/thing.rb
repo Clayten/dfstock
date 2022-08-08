@@ -1,5 +1,6 @@
-require 'comparators'
-require 'categories'
+require 'thing/comparators'
+require 'thing/categories'
+require 'scaffold'
 
 module DFStock
 
@@ -194,17 +195,9 @@ module DFStock
 
 end
 
-# FIXME - for rerunning inheritance during testing
-def reinherit ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
-  # p [:ks, ks]
-  ks.each {|k|
-    kp = k.ancestors[1]
-    # p [:kp, kp, :<=, :k, k]
-    kp.inherited k
-  }
-end
-# Reinherit should not be called unless followed by a reload
-def fullhack ; rehack ; reinherit ; rehack end
-def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
-def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
+require 'thing/builtin'
+require 'thing/creature'
+require 'thing/plant'
+require 'thing/inorganic'
+require 'thing/item'
+require 'thing/misc'
