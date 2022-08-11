@@ -23,6 +23,7 @@ module DFStock
     return :already_reloading if caller.any? {|c| c =~ /:in `reload'/ }
     clear_error_before_loading
     libs.each {|f| loadfile f }
+    puts "Finished reload"
   end
 end
 DFStock.reload
@@ -574,19 +575,20 @@ class DFHack::BuildingWorkshopst
 end
 
 # FIXME - for rerunning inheritance during testing
-def reinherit ks = nil
-  ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
-  # p [:ks, ks]
-  ks.each {|k|
-    kp = k.ancestors[1]
-    # p [:kp, kp, :<=, :k, k]
-    kp.inherited k
-  }
-end
+# def reinherit ks = nil
+#   ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
+#   # p [:ks, ks]
+#   ks.each {|k|
+#     kp = k.ancestors[1]
+#     # p [:kp, kp, :<=, :k, k]
+#     kp.inherited k
+#   }
+# end
 # Reinherit should not be called unless followed by a reload
-def fullhack ; rehack ; reinherit ; rehack end
+# def fullhack ; rehack ; reinherit ; rehack end
 def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
 def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
+def time ; s = Time.now ; r = yield ; puts "Took #{Time.now - s}s" ; r end
 
 def buildings ; df.world.buildings.all.select {|x| x.class <= DFHack::Building } end
 def stockpiles

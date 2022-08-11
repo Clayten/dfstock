@@ -69,7 +69,7 @@ module DFStock
           end
           klass.send(:define_method, desired_name) {|&b|
             # Cache the item array - it must be linked to the flags array so each stock-settings instance must have its own
-            @@instances ||= {}
+            @@instances ||= {} # On the Scaffold module
             @@instances[[desired_name, _memaddr]] ||=
             begin
               flags_array = send base_name
