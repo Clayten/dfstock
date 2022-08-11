@@ -330,41 +330,9 @@ if self.class.const_defined?(:DFHack)
       end
     end
 
-    class HaulingStop
-      include Linkable
-      def get_links
-        p :gl
-        links = Hash.new {|h,k| h[k] = [] }
-        stockpiles.each {|link|
-          mode = link.mode.give ? :give : :take
-          building = df.world.buildings.all.find {|b| b.id == link.building_id }
-          links[mode] << building
-        }
-        {:stockpile => links}
-      end
-    end
-
-    class BuildingStockpilest
-      include Linkable
-      def get_links
-        links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
-        links[:stockpile][:give] =        self.links.give_to_pile.to_a
-        links[:stockpile][:take] =        self.links.take_from_pile.to_a
-        links[:workshop ][:give] =        self.links.give_to_workshop.to_a
-        links[:workshop ][:take] =        self.links.take_from_workshop.to_a
-        links
-      end
-    end
-
-    class BuildingWorkshopst
-      include Linkable
-      def get_links
-        links = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = [] } }
-        links[:stockpile][:give] = getStockpileLinks.give_to_pile.to_a
-        links[:stockpile][:take] = getStockpileLinks.take_from_pile.to_a
-        links
-      end
-    end
+    class HaulingStop ; include Linkable end
+    class BuildingStockpilest ; include Linkable end
+    class BuildingWorkshopst ; include Linkable end
   end
 
 end
