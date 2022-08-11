@@ -225,7 +225,8 @@ module DFStock
     end
 
     def all_items ; arrays.values.flatten end
-    def enabled ; all_items.select {|i| i.linked? && i.enabled? } end
+    def enabled_items ; all_items.select {|i| enabled? && i.linked? && i.enabled? } end
+    def enabled_flags ; end
 
     def allow_all
       all_items.each &:enable
@@ -317,8 +318,45 @@ class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, D
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
 
+module DFHack::StockComparator
+  # These operations are only on items, not on flags
+  def - other
+    p [:minus, self.class, other.class]
+    DFHack::Settings.new(pathnames - other.pathnames)
+  end
+
+  def + other
+    p [:plus, self.class, other.class]
+    DFHack::Settings.new((pathnames + other.pathnames).uniq)
+  end
+
+  def & other
+    p [:and, self.class, other.class]
+    count = Hash.new 0
+    (pathnames + other.pathnames).each {|pn| count[pn] += 1 }
+    DFHack::Settings.new(count.select {|k,c| c == 2 }.map(&:first))
+  end
+
+  def ^ other
+    p [:xor, self.class, other.class]
+    count = Hash.new 0
+    (pathnames + other.pathnames).each {|pn| count[pn] += 1 }
+    DFHack::Settings.new(count.select {|k,c| c == 1 }.map(&:first))
+  end
+
+  def length ; pathnames.length end
+end
+class DFHack::Settings
+  include DFHack::StockComparator
+
+  attr_accessor :enabled_pathnames
+  def initialize list
+    @enabled_pathnames = list
+  end
+end
 
 class DFHack::StockpileSettings
+  include DFHack::StockComparator
   # From the classname of a category to the name the parent (this) uses to refer to that category
   # Categories in the order they appear in the stockpile
   def self.stock_categories
@@ -364,47 +402,20 @@ class DFHack::StockpileSettings
   def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
   def all_items ; categories.map {|_,c| c.all_items }.compact.flatten end
-  # def enabled ; all_items.select {|i| i.linked? && i.enabled? } end
-  def enabled ; categories.select {|_,c| c.enabled? }.map {|_,c| c.enabled }.compact.flatten end
+  def enabled_items ; categories.map {|_,c| c.enabled_items }.compact.flatten end
+  def pathnames ; enabled_items.map(&:pathname) end
 
   def == o
-    (  enabled.map(&:pathname) ==
-     o.enabled.map(&:pathname)) &&
+    (enabled_pathnames == o.enabled_pathnames) &&
     (  categories.map {|_,c| c.features.select {|t,*_| t == :flag }.map {|_,n1,n2,_| c.send(n2 || n1) } }.flatten ==
      o.categories.map {|_,c| c.features.select {|t,*_| t == :flag }.map {|_,n1,n2,_| c.send(n2 || n1) } }.flatten)
   end
 
   def copy other
-    other_items = Hash[*other.all_items.select(&:enabled?).map {|o| [o.pathname, true] }.flatten]
-    all_items.each {|i| i.set other_items[i.pathname] }
-    categories.each {|cn,c| c.features.select {|t,*_| t == :flag }.each {|_,n1,n2,_| n = n2 || n1 ; c.send("#{n}=", other.send(cn).send(n)) } }
+    other_items = Hash[*other.enabled_pathnames.map {|x| [x, true] }.flatten]
+    all_items.each {|i| e = other_items[i.pathname] ; i.set e unless i.enabled? == !!e }
+    # categories.each {|cn,c| c.features.select {|t,*_| t == :flag }.each {|_,n1,n2,_| n = n2 || n1 ; c.send("#{n}=", other.send(cn).send(n)) } }
     self
-  end
-
-  # Our items minus the other pile's items
-  def - other
-    other_items = Hash[*other.all_items.map {|o| [o.pathname, o] }.flatten]
-    all_items.select {|s|
-      next unless o = other_items[s.pathname]
-      se = s.linked? && s.enabled?
-      oe = o.linked? && o.enabled?
-      se && !oe
-    }
-  end
-
-  def + other
-    other_items = Hash[*other.all_items.map {|o| [o.pathname, o] }.flatten]
-    all_items.select {|s|
-      next unless o = other_items[s.pathname]
-      se = s.linked? && s.enabled?
-      oe = o.linked? && o.enabled?
-      se || oe
-    }
-  end
-
-  def set_enabled list
-    raise "Not a proper match - there should be #{all_items.length} bools" unless items.length == all_items.length
-    all_items.each_with_index {|item,i| item.set !!list[i] }
   end
 
   def find_by_pathname path_or_cat, subcat = nil, token = nil
@@ -471,11 +482,15 @@ module DFHack::StockForwarder
   def find_by_pathname *a ; settings.find_by_pathname *a end
   def categories          ; settings.categories end
   def all_items           ; settings.all_items end
-  def enabled             ; settings.enabled end
+  def enabled_items       ; settings.enabled_items end
+  def pathnames           ; settings.pathnames end
+  def length              ; settings.length end
   def copy o              ; settings.copy o end
   def == o                ; settings == o end
   def - o                 ; settings - o end
   def + o                 ; settings + o end
+  def & o                 ; settings & o end
+  def ^ o                 ; settings ^ o end
 end
 
 
