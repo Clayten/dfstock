@@ -214,17 +214,17 @@ module DFStock
     df.ui.hauling.routes.map {|r| r.stops.to_a }.flatten
   end
 
-  # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category
-  #
-  # Stockpile category items aren't directly linked to their container, to go back up the tree such
-  # as by asking a child to manipulate its parent is done via ObjectSpace lookup to find the right parent.
-  #
-  # s = stockpile_at_cursor()
-  # s.id
-  # -> 12
-  # s.food.parent.id
-  # -> 12
   module StockFinder
+    # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category
+    #
+    # Stockpile category items aren't directly linked to their container, to go back up the tree such
+    # as by asking a child to manipulate its parent is done via ObjectSpace lookup to find the right parent.
+    #
+    # s = stockpile_at_cursor()
+    # s.id
+    # -> 12
+    # s.food.parent.id
+    # -> 12
 
     def stock_category_name   ; DFHack::StockpileSettings.stock_category_name   self end
     def stock_category_method ; DFHack::StockpileSettings.stock_category_method self end
@@ -253,11 +253,11 @@ module DFStock
       true
     end
 
-    def     set x ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}=", !!x ; enabled? end
-    def     get   ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}" end
-    def  enable   ; set true  end
-    def disable   ; set false end
-    def enabled?  ; !!get end
+    def     set x  ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}=", !!x ; enabled? end
+    def     get    ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}" end
+    def  enabled?  ; !!get end
+    def  enable    ; set true  end
+    def disable    ; set false end
 
     def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
 
@@ -269,8 +269,9 @@ module DFStock
         cat.downcase!
         raise "Category provided and does not match, #{cat} vs #{stock_category_method}" if cat != stock_category_method
       end
+      subcat.downcase!
       raise "No such subcategory #{subcat}" unless respond_to? subcat
-      send(subcat).find {|x| x.token == token }
+      $sc = send(subcat) ; $sc.find {|x| x.token == token }
     end
 
     def to_s ; "#{self.class.name}:#{'0x%016x' % object_id }" end
