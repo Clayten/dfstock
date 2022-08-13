@@ -1,0 +1,3 @@
+# This file should be linked to 'df/dfutils' and the commands from dfhack.init.txt should be appended to 'df/dfhack.init'
+
+load '~/dev/dfstock/stockpile.rb'
