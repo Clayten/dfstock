@@ -202,6 +202,18 @@ module DFStock
     add_array(Parchment, :parchment)
   end
 
+  def self.pathname_separator ; '|' end
+  def self.buildings ; df.world.buildings.all.select {|x| x.class <= DFHack::Building } end
+  def self.stockpiles
+    buildings.select {|x| x.class == DFHack::BuildingStockpilest }
+  end
+  def self.linkable_workshops
+    buildings.select {|x| x.class == DFHack::BuildingWorkshopst && x.respond_to?(:getStockpileLinks) && x.getStockpileLinks }
+  end
+  def self.hauling_stops # HaulingStops - there often are multiple at the same location for manually-guided routes.
+    df.ui.hauling.routes.map {|r| r.stops.to_a }.flatten
+  end
+
   # Finds and accesses the flags field in the parent stockpile to allow enabling/disabling the category
   #
   # Stockpile category items aren't directly linked to their container, to go back up the tree such
@@ -249,8 +261,12 @@ module DFStock
     def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
 
     def find_by_token path_or_subcat, token = nil
-      if token ;    subcat        = path_or_subcat
-      else     ; _, subcat, token = path_or_subcat.split(',').map(:to_sym)
+      if token ;      subcat        = path_or_subcat
+      else     ; cat, subcat, token = path_or_subcat.split(DFStock.pathname_separator)
+      end
+      if cat
+        cat.downcase!
+        raise "Category provided and does not match, #{cat} vs #{stock_category_method}" if cat != stock_category_method
       end
       raise "No such subcategory #{subcat}" unless respond_to? subcat
       send(subcat).find {|x| x.token == token }
