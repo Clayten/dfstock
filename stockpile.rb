@@ -229,8 +229,9 @@ module DFStock
     def stock_category_name   ; DFHack::StockpileSettings.stock_category_name   self end
     def stock_category_method ; DFHack::StockpileSettings.stock_category_method self end
 
-    # Look at all possible parents to find the one pointing to your memory
+    # Look at all possible settings object parents to find the one pointing to your memory
     def parent
+      @parent ||=
       ObjectSpace.each_object(DFHack::StockpileSettings).find {|ss|
         ss.allow_organic rescue next # guard against uninitialized objects
         ss.send(stock_category_method)._memaddr == _memaddr
@@ -404,11 +405,9 @@ class DFHack::StockpileSettings
   # Object to stock-class method - Pile.settings.animals -> 'animal'
   def self.stock_category_method obj ; stock_categories[stock_category_name obj] end
 
-  # Look at all possible parents to find the one pointing to your memory
+  # Look at all possible settings-containing "buildings" to find the one pointing to your memory
   def parent
-    stockpiles = ObjectSpace.each_object(DFHack::BuildingStockpilest).to_a
-    trackstops = ObjectSpace.each_object(DFHack::HaulingStop).to_a
-    (stockpiles + trackstops).find {|sp|
+    (stockpiles + hauling_stops).find {|sp|
       sp.settings rescue next # guard against uninitialized objects
       sp.settings._memaddr == _memaddr
     }
