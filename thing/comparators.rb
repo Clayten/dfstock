@@ -6,6 +6,23 @@ module DFStock
   # As such, material questions about a conceptual strawberry plant are necessarily a bit ambiguous.
 
   module Comparators
+    def enum_to_hash e
+      return {} unless e.respond_to? :_indexenum
+      Hash[e.each_with_index.map {|v,i|
+        [e._indexenum.sym(i), v]
+      }.select {|k,v| v }]
+    end
+    def active_flags ms
+      ms = [*ms]
+      Hash[ms.map {|x|
+        x.respond_to?(:flags) ? x.flags : {}
+      }.inject({}) {|a,b|
+        a.merge Hash[enum_to_hash b]
+      }.sort_by {|k,v|
+        k.to_s
+      }]
+    end
+
     def reaction_products ms = materials
       rps = ms.map {|m|
         r = m.reaction_product
@@ -22,7 +39,15 @@ module DFStock
     def reaction_class ms = materials ; [*ms].map {|m| m.reaction_class.to_a.map(&:to_sym) }.flatten.sort.uniq end
 
     def food_indexes ms = materials
-      ms.flatten.inject([]) {|a,m| fmis = m.food_mat_index.to_hash.reject {|k,v| -1 == v } ; a << [m.id, fmis] unless fmis.empty? ; a }
+      h = Hash.new {|h,k| h[k] = {} }
+      ms.flatten.each {|m|
+        enum_to_hash(m.food_mat_index).
+          reject {|k,v| -1 == v }.
+          each {|k,v|
+            h[m.id][k] = v
+          }
+      }
+      h
     end
 
     def materials_by_category
@@ -35,7 +60,7 @@ module DFStock
     def build_color     ; material.build_color if has_material? end
     def basic_color     ; material.basic_color if has_material? end
     def state_color     ; material.state_color if has_material? end
-    def state_color_str ; material.state_color_str.to_hash.reject {|k,v| v.empty? } if has_material? end
+    def state_color_str ; enum_to_hash(material.state_color_str).reject {|k,v| v.empty? } if has_material? end
     def colors ; [:tc, tile_color, :buc, build_color, :bac, basic_color, :sc, state_color, :scs, state_color_str] end
     def color
       # fore, back, bright = tile_color.to_a
@@ -59,16 +84,6 @@ module DFStock
     def raw_name        ; has_raw? && raw.respond_to?(:name)        ? raw.name          : nil end
     def raw_name_plural ; has_raw? && raw.respond_to?(:name_plural) ? raw.name_plural   : raw_name end
 
-    def active_flags ms
-      ms = [*ms]
-      Hash[ms.map {|x|
-        x.respond_to?(:flags) ? x.flags : {}
-      }.inject({}) {|a,b|
-        a.merge Hash[b.to_hash.select {|k,v| v }]
-      }.sort_by {|k,v|
-        k.to_s
-      }]
-    end
     def material_flags ms = nil
       return {} unless has_material?
       active_flags(ms || materials)
@@ -79,11 +94,11 @@ module DFStock
     end
     def raw_base_flags
       return {} unless has_raw? && raw.respond_to?(:base_flags)
-      raw.base_flags.to_hash.select {|k,v| v }
+      active_flags(raw.base_flags)
     end
     def raw_props_flags
       return {} unless has_raw? && raw.respond_to?(:props)
-      raw.props.flags.to_hash.select {|k,v| v }
+      enum_to_hash(raw.props.flags)
     end
     def raw_strings
       return [] unless has_raw? && raw.respond_to?(:raw_strings)
@@ -124,7 +139,7 @@ module DFStock
 
     def tree? ; raw_flags[:TREE] if has_raw? end
 
-    def subterranean? ; flags.to_hash.select {|k,v| v }.any? {|f| f =~ /BIOME_SUBTERRANEAN/ } end
+    def subterranean? ; raw_flags.select {|k,v| v }.keys.any? {|f| f =~ /SUBTERRANEAN/ } end
     def above_ground? ; !subterranean end
 
     def growths   ; (has_raw? && raw.respond_to?(:growths)) ? raw.growths.to_a : [] end

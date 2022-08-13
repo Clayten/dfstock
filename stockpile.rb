@@ -590,39 +590,15 @@ class DFHack::BuildingWorkshopst
   end
 end
 
-# FIXME - for rerunning inheritance during testing
-# def reinherit ks = nil
-#   ks ||= ObjectSpace.each_object(Class).select {|k| k < DFStock::Thing }.sort_by {|k| k.ancestors.length }
-#   # p [:ks, ks]
-#   ks.each {|k|
-#     kp = k.ancestors[1]
-#     # p [:kp, kp, :<=, :k, k]
-#     kp.inherited k
-#   }
-# end
-# Reinherit should not be called unless followed by a reload
-# def fullhack ; rehack ; reinherit ; rehack end
-def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
+# debug methods
 def wrap ; r = nil ; begin ; r = yield ; rescue Exception => e ; $e = e ; end ; r || e end
+def try &b ; r = wrap &b ; puts(r.backtrace[0..12],'...',r.backtrace[-12..-1]) if r.is_a?(Exception) ; r end
 def time ; s = Time.now ; r = yield ; puts "Took #{Time.now - s}s" ; r end
 
-def buildings ; df.world.buildings.all.select {|x| x.class <= DFHack::Building } end
-def stockpiles
-  # Stockpiles and Workshops
-  $bs = bs = buildings.select {|x|
-    x.class == DFHack::BuildingStockpilest ||
-    (x.class == DFHack::BuildingWorkshopst &&
-		  x.respond_to?(:getStockpileLinks) &&
-			x.getStockpileLinks)
-  }
-end
-def hauling_stops
-  # HaulingStops - there often are multiple at the same location for manually-guided routes.
-  $hs = hs = df.ui.hauling.routes.map {|r| r.stops.to_a }.flatten
-end
+# UX Convenience methods at top level
 def pile_at_cursor
   c = df.cursor
-  (stockpiles + hauling_stops).find {|b|
+  (DFStock.stockpiles + DFStock.hauling_stops + DFStock.linkable_workshops).find {|b|
     if b.respond_to? :pos # Hauling Stops - Warning: Will only find the first stop at a location
       b.pos.z == c.z &&
         b.pos.x == c.x &&
@@ -641,18 +617,3 @@ def pile_at_cursor
     end
   }
 end
-
-module DFDebugMethodsEnumerable
-	def to_hash
-		return {} unless _indexenum
-		Hash[each_with_index.map {|v,i|
-			[_indexenum.sym(i), v]
-		}]
-	end
-	def active ; to_hash.select {|k,v| v }.map {|k,v| k }.sort_by(&:to_s) end
-	def a ; active.reject {|k| k.to_s =~ /^BIOME/ } end
-end
-module DFHack::MemHack::Enumerable ; include DFDebugMethodsEnumerable end
-class DFHack::MemHack::StaticArray ; include DFDebugMethodsEnumerable end
-class DFHack::MemHack::DfFlagarray ; include DFDebugMethodsEnumerable end
-module Enumerable ; def to_hash *x, &b ; to_h *x, &b end end
