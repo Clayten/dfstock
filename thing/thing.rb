@@ -178,7 +178,7 @@ module DFStock
 
     # Only for xyz_index, looks up class XYZ in references and fetches that class's index for this raw/material/thing
     def method_missing mn, *args
-      return index_lookup(mn) if mn =~ /_index/
+      return index_lookup(mn) if mn =~ /_index$/
       super
     end
 
