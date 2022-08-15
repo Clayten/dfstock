@@ -24,7 +24,7 @@ module DFStock
     end
 
     def reaction_products ms = materials
-      rps = ms.map {|m|
+      rps = [*ms].map {|m|
         r = m.reaction_product
         r.id.each_with_index.map {|x,i|
           mt, mi = r.material.mat_type[i], r.material.mat_index[i]
@@ -38,20 +38,26 @@ module DFStock
 
     def reaction_class ms = materials ; [*ms].map {|m| m.reaction_class.to_a.map(&:to_sym) }.flatten.sort.uniq end
 
-    def food_indexes ms = materials
+    # {"FAT"=>[:Glob, 390], "MUSCLE"=>[:Meat, 2342], "EYE"=>[:Meat, 2343], ...
+    def food_mat_indexes ms = materials
       h = Hash.new {|h,k| h[k] = {} }
-      ms.flatten.each {|m|
+      h = {}
+      [*ms].flatten.each {|m|
         enum_to_hash(m.food_mat_index).
           reject {|k,v| -1 == v }.
           each {|k,v|
-            h[m.id][k] = v
+            h[m.id] = [k, v]
           }
       }
       h
     end
 
+    # {:Glob=>["FAT", "TALLOW"], :Meat=>["MUSCLE", "EYE", "BRAIN", "LUNG", ...
     def materials_by_category
-      food_indexes.map {|m,i| [i.keys.first, m] }.inject(Hash.new {|h,k| h[k] = [] }) {|h,(k,m)| h[k] << m ; h }
+      h = Hash.new {|h,k| h[k] = [] }
+      food_mat_indexes.map {|m,(k,i)| [k, m] }.
+        each {|k,m| h[k] << m }
+      h
     end
 
     def value ; material.material_value if has_material? end
@@ -86,11 +92,11 @@ module DFStock
 
     def material_flags ms = nil
       return {} unless has_material?
-      active_flags(ms || materials)
+      cache(:mat_flags) { active_flags(ms || materials) }
     end
     def raw_flags
       return {} unless has_raw?
-      active_flags([raw])
+      cache(:raw_flags) { active_flags([raw]) }
     end
     def raw_base_flags
       return {} unless has_raw? && raw.respond_to?(:base_flags)
@@ -108,6 +114,8 @@ module DFStock
     # Buitings
     def is_glass? ; has_material? && material_flags[:IS_GLASS] end
 
+    def material_ids ; materials.map(&:id) end
+
     # Plants
     def mat_mill       ; materials.find {|m| m.id == 'MILL' } end
     def mat_drink      ; materials.find {|m| m.id == 'DRINK' } end
@@ -116,8 +124,8 @@ module DFStock
     def mat_seed       ; materials.find {|m| m.id == 'SEED' } end
     def mat_leaf       ; materials.find {|m| m.id == 'LEAF' } end
     def mat_thread     ; materials.find {|m| m.id == 'THREAD' } end
-    def mat_paper      ; materials.find {|m| m.reaction_class.any? {|r| r.to_s =~ /PAPER/ } } end
     def mat_structural ; materials.find {|m| m.id == 'STRUCTURAL' } end
+    def mat_paper      ; materials.find {|m| m.reaction_class.any? {|r| r.to_s =~ /PAPER/ } } end
 
     def mat_alcohol    ; mat_drink || mat_mead end
 
@@ -140,7 +148,7 @@ module DFStock
     def tree? ; raw_flags[:TREE] if has_raw? end
 
     def subterranean? ; raw_flags.select {|k,v| v }.keys.any? {|f| f =~ /SUBTERRANEAN/ } end
-    def above_ground? ; !subterranean end
+    def above_ground? ; !subterranean? end
 
     def growths   ; (has_raw? && raw.respond_to?(:growths)) ? raw.growths.to_a : [] end
     def growth    ; growths.find {|g| g.str_growth_item.include? material.id } end
@@ -191,24 +199,30 @@ module DFStock
     end
 
     # Inorganics
-    def is_gem?   ; material.flags[:IS_GEM] end
-    def is_stone? ; material.flags[:IS_STONE] end
-    def is_metal? ; material.flags[:IS_METAL] end
+    def economic_uses
+      return [] unless has_raw? && raw.respond_to?(:economic_uses)
+      raw.economic_uses
+    end
 
-    def is_soil? ; raw.flags[:SOIL] end
+    def is_gem?   ; material_flags[:IS_GEM] end
+    def is_stone? ; material_flags[:IS_STONE] end
+    def is_metal? ; material_flags[:IS_METAL] end
 
-    def is_ore?  ; raw.flags[:METAL_ORE] end
+    def is_soil? ; raw_flags[:SOIL] end
+
+    def is_ore?  ; raw_flags[:METAL_ORE] end
 
     def is_economic_stone?
       !is_ore? &&
       !is_metal? &&
       !is_soil? &&
-      !raw.economic_uses.empty?
+      !economic_uses.empty?
     end
 
     def is_clay?
+      return false unless has_raw? and raw.respond_to? :id
        raw.id =~ /CLAY/ &&
-      !raw.flags[:AQUIFER] &&
+      !raw_flags[:AQUIFER] &&
       !is_stone?
     end
 
@@ -217,13 +231,12 @@ module DFStock
       !is_ore? &&
       !is_economic_stone? &&
       !is_clay? &&
-      !material.flags[:NO_STONE_STOCKPILE]
+      !material_flags[:NO_STONE_STOCKPILE]
     end
 
     def is_stone_category? ; is_ore? || is_clay? || is_other_stone? || is_economic_stone?  end
 
     def is_magma_safe?
-      # p [:ims?, self, :heat, material.heat]
       return nil unless has_material? && material.heat
 
       magma_temp = 12000
