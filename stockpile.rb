@@ -109,59 +109,59 @@ module DFStock
 end
 
 # The Settings Categories are intended to have accessors for classes of items
-class DFHack::StockpileSettings_TAnimals       ; include DFStock::StockFinder, DFStock::AnimalMod
+class DFHack::StockpileSettings_TAnimals
   def enable ; raise "Not functional, doesn't enable entries" end
 end
-class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod
+class DFHack::StockpileSettings_TFood
   def enable ; raise "Not functional, can't enable sub-categories" end
   def cookable      ; all_items.select(&:edible_cooked?) ; end # just the items, across sub-categories, that can become a meal in a kitchen
   def needs_cooking ; cookable.select {|f| !f.edible_raw? } ; end # just the items, across sub-categories, that need a kitchen to become food
 end
-class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod
+class DFHack::StockpileSettings_TFurniture
   def enable ; raise "Not functional, doesn't enable entries" end
 end
-class DFHack::StockpileSettings_TCorpse        ; include DFStock::StockFinder
+class DFHack::StockpileSettings_TCorpse
   def _memaddr ; hash end # Fake, just to identify the same instance
   def arrays ; {} end # No arrays of items
   def enable ; raise "Not functional" end
 end
-class DFHack::StockpileSettings_TRefuse        ; include DFStock::StockFinder, DFStock::RefuseMod
+class DFHack::StockpileSettings_TRefuse
   def enable ; raise "Not functional, crashes" end
 end
-class DFHack::StockpileSettings_TStone         ; include DFStock::StockFinder, DFStock::StoneMod
+class DFHack::StockpileSettings_TStone
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TAmmo          ; include DFStock::StockFinder, DFStock::AmmoMod
+class DFHack::StockpileSettings_TAmmo
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TCoins         ; include DFStock::StockFinder, DFStock::CoinMod
+class DFHack::StockpileSettings_TCoins
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TBarsBlocks    ; include DFStock::StockFinder, DFStock::BarsBlocksMod
+class DFHack::StockpileSettings_TBarsBlocks
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TGems          ; include DFStock::StockFinder, DFStock::GemsMod
+class DFHack::StockpileSettings_TGems
   def enable ; raise "Not functional, crashes" end
 end
-class DFHack::StockpileSettings_TFinishedGoods ; include DFStock::StockFinder, DFStock::FinishedGoodsMod
+class DFHack::StockpileSettings_TFinishedGoods
   def enable ; raise "Not functional, crashes" end
 end
-class DFHack::StockpileSettings_TLeather       ; include DFStock::StockFinder, DFStock::LeatherMod
+class DFHack::StockpileSettings_TLeather
   def enable ; raise "Not functional, doesn't enable entries" end
 end
-class DFHack::StockpileSettings_TCloth         ; include DFStock::StockFinder, DFStock::ClothMod
+class DFHack::StockpileSettings_TCloth
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TWood          ; include DFStock::StockFinder, DFStock::WoodMod
+class DFHack::StockpileSettings_TWood
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TWeapons       ; include DFStock::StockFinder, DFStock::WeaponsMod
+class DFHack::StockpileSettings_TWeapons
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TArmor         ; include DFStock::StockFinder, DFStock::ArmorMod
+class DFHack::StockpileSettings_TArmor
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
-class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, DFStock::SheetMod
+class DFHack::StockpileSettings_TSheet
   def enable ; raise "Not functional, can't enable sub-categories" end
 end
 

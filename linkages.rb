@@ -172,3 +172,21 @@ module DFStock
     add_array(Parchment, :parchment)
   end
 end
+
+class DFHack::StockpileSettings_TAnimals       ; include DFStock::StockFinder, DFStock::AnimalMod end
+class DFHack::StockpileSettings_TFood          ; include DFStock::StockFinder, DFStock::FoodMod end
+class DFHack::StockpileSettings_TFurniture     ; include DFStock::StockFinder, DFStock::FurnitureMod end
+class DFHack::StockpileSettings_TCorpse        ; include DFStock::StockFinder end
+class DFHack::StockpileSettings_TRefuse        ; include DFStock::StockFinder, DFStock::RefuseMod end
+class DFHack::StockpileSettings_TStone         ; include DFStock::StockFinder, DFStock::StoneMod end
+class DFHack::StockpileSettings_TAmmo          ; include DFStock::StockFinder, DFStock::AmmoMod end
+class DFHack::StockpileSettings_TCoins         ; include DFStock::StockFinder, DFStock::CoinMod end
+class DFHack::StockpileSettings_TBarsBlocks    ; include DFStock::StockFinder, DFStock::BarsBlocksMod end
+class DFHack::StockpileSettings_TGems          ; include DFStock::StockFinder, DFStock::GemsMod end
+class DFHack::StockpileSettings_TFinishedGoods ; include DFStock::StockFinder, DFStock::FinishedGoodsMod end
+class DFHack::StockpileSettings_TLeather       ; include DFStock::StockFinder, DFStock::LeatherMod end
+class DFHack::StockpileSettings_TCloth         ; include DFStock::StockFinder, DFStock::ClothMod end
+class DFHack::StockpileSettings_TWood          ; include DFStock::StockFinder, DFStock::WoodMod end
+class DFHack::StockpileSettings_TWeapons       ; include DFStock::StockFinder, DFStock::WeaponsMod end
+class DFHack::StockpileSettings_TArmor         ; include DFStock::StockFinder, DFStock::ArmorMod end
+class DFHack::StockpileSettings_TSheet         ; include DFStock::StockFinder, DFStock::SheetMod end
