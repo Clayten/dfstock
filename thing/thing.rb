@@ -87,6 +87,7 @@ module DFStock
     def linked? ; link && !link.empty? end
 
     def check_index
+      raise "#{self.class}: Category #{stock_category_name} is not enabled" unless @category.enabled?
       raise "#{self.class}: No linked array" unless link
       raise "#{self.class}: Linked array is empty - did you enable the category?" if link.empty?
       raise "#{self.class}: Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
@@ -109,6 +110,22 @@ module DFStock
     def self.token_index ; cache([:token_index, self]) { Hash[*instances.map(&:token).each_with_index.map {|t,i| [t, i] }.flatten] } end
 
     # Base methods
+    def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
+    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
+
+    def has_raw?      ; !!(@raw      || raw      rescue false) end
+    def has_material? ; !!(@material || material rescue false) end
+
+    def materials
+      ms =
+        if has_raw? && raw.respond_to?(:material)
+          raw.material
+        elsif respond_to?(:material)
+          material
+        end
+      [*ms]
+    end
+
     def name ; 'NONE' end
 
     def raw_token
@@ -126,23 +143,10 @@ module DFStock
       elsif respond_to?(:type) && type                            ; "#{type}"
       end.upcase
     end
-    def pathname ; [@category_name,@subcategory_name,token].join(DFStock.pathname_separator).gsub(/\s/,'_') end
-
-    def raw       ; @raw      || (@material ? nil : (self.class.raws[index] if self.class.respond_to?(:raws))) end
-    def material  ; @material || self.class.respond_to?(:materials) ? self.class.materials[index] : ([*raw.material].first if has_raw? && raw.respond_to?(:material)) end
-
-    def has_raw?      ; !!(@raw      || raw      rescue false) end
-    def has_material? ; !!(@material || material rescue false) end
-
-    def materials
-      ms =
-        if has_raw? && raw.respond_to?(:material)
-          raw.material
-        elsif respond_to?(:material)
-          material
-        end
-      [*ms]
-    end
+    def stock_category_name    ; @category.stock_category_method end
+    def stock_subcategory_name ; @subcategory_name end
+    def pathname_parts ; [stock_category_name, stock_subcategory_name, token] end
+    def pathname ; pathname_parts.join(DFStock.pathname_separator).gsub(/\s/,'_') end
 
     # Instead of an inheritance-based class structure this finds each class that wraps the same data and the index-number it uses
     def references
