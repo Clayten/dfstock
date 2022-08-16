@@ -298,41 +298,55 @@ module DFStock
   # end
 end
 
-if self.class.const_defined?(:DFHack)
-  module DFHack
-    module Linkable
-      # Check for a link between this pile and a pile or workshop with a given name
-      #
-      # By default, an indirect link via a Quantum Storage Pile is allowed, if the QSP is called
-      # the same as the source pile + 'QSP', and the QSP links to the desired target.
-      #
-      # To specifically check that a QSP is not used, set allow_qsp: false
-      # To specifically check for a QSP, use its full name, set allow_qsp: false, and check the give and take links manually
-      def check_for_link link_name, target_type: :stockpile, direction: :give, allow_qsp: true, return_link: false
-        # p [:check_for_link, name, direction, link_name, :allow_qsp, allow_qsp]
-        raise "Incorrect usage, pile name or target pile name contains 'QSP' and allow_qsp is true." if allow_qsp && (name =~ /QSP$/ || link_name =~ /QSP$/)
-        raise "Incorrect usage, target_type must be :workshop or :stockpile" unless [:workshop, :stockpile].include? target_type
-        raise "Incorrect usage, direction must be :give or :take" unless [:give, :take].include? direction
+module DFHack
+  module Linkable
+    # Check for a link between this pile and a pile or workshop with a given name
+    #
+    # By default, an indirect link via a Quantum Storage Pile is allowed, if the QSP is called
+    # the same as the source pile + 'QSP', and the QSP links to the desired target.
+    #
+    # To specifically check that a QSP is not used, set allow_qsp: false
+    # To specifically check for a QSP, use its full name, set allow_qsp: false, and check the give and take links manually
+    def check_for_link link_name, target_type: :stockpile, direction: :give, allow_qsp: true, return_link: false
+      # p [:check_for_link, name, direction, link_name, :allow_qsp, allow_qsp]
+      raise "Incorrect usage, pile name or target pile name contains 'QSP' and allow_qsp is true." if allow_qsp && (name =~ /QSP$/ || link_name =~ /QSP$/)
+      raise "Incorrect usage, target_type must be :workshop or :stockpile" unless [:workshop, :stockpile].include? target_type
+      raise "Incorrect usage, direction must be :give or :take" unless [:give, :take].include? direction
 
-        links = get_links[target_type][direction]
+      links = get_links[target_type][direction]
 
-        link = links.find {|link| link.name == link_name }
-        return (return_link ? link : true) if link
+      link = links.find {|link| link.name == link_name }
+      return (return_link ? link : true) if link
 
-        return false unless allow_qsp
-        if direction == :give
-          return false unless link = check_for_link(     "#{name}QSP",  target_type: :stockpile,  direction: :give, allow_qsp: false, return_link: true)
-                                link.check_for_link(   link_name,       target_type: target_type, direction: :give, allow_qsp: false, return_link: return_link)
-        else
-          return false unless link = check_for_link("#{link_name}QSP",  target_type: :stockpile,  direction: :take, allow_qsp: false, return_link: true)
-                                link.check_for_link(   link_name,       target_type: target_type, direction: :take, allow_qsp: false, return_link: return_link)
-        end
+      return false unless allow_qsp
+      if direction == :give
+        return false unless link = check_for_link(     "#{name}QSP",  target_type: :stockpile,  direction: :give, allow_qsp: false, return_link: true)
+                              link.check_for_link(   link_name,       target_type: target_type, direction: :give, allow_qsp: false, return_link: return_link)
+      else
+        return false unless link = check_for_link("#{link_name}QSP",  target_type: :stockpile,  direction: :take, allow_qsp: false, return_link: true)
+                              link.check_for_link(   link_name,       target_type: target_type, direction: :take, allow_qsp: false, return_link: return_link)
       end
     end
-
-    class HaulingStop ; include Linkable end
-    class BuildingStockpilest ; include Linkable end
-    class BuildingWorkshopst ; include Linkable end
   end
 
+  class HaulingStop ; include Linkable end
+  class BuildingStockpilest ; include Linkable end
+  class BuildingWorkshopst ; include Linkable end
+end
+
+module DFStock
+  def self.analyze_stockpiles
+    stockpiles.each {|pile|
+      $p = pile
+      links = pile.get_links
+      targets = links[:stockpile][:give] + links[:hauling][:give]
+      next if pile.enabled_pathnames.length.zero?
+      next if targets.empty?
+      puts "Pile #{pile.name} at #{pile.x1},#{pile.y1},#{pile.z} feeds into #{targets.length} targets: #{targets.map(&:name).join(', ')}"
+      # next puts "\thas no outputs - will retain everything" if targets.empty?
+      leftover = targets.inject(pile) {|a,b| a - b }
+      puts "\thas #{leftover.length} stuck stock item-types out of #{pile.enabled_pathnames.length}"
+    }
+    true
+  end
 end
