@@ -340,30 +340,30 @@ end
 module DFHack::StockComparator
   # These operations are only on items, not on flags
   def - other
-    p [:minus, self.class, other.class]
-    DFHack::Settings.new(pathnames - other.pathnames)
+    # p [:minus, self.class, other.class]
+    DFHack::Settings.new(enabled_pathnames - other.enabled_pathnames)
   end
 
   def + other
-    p [:plus, self.class, other.class]
-    DFHack::Settings.new((pathnames + other.pathnames).uniq)
+    # p [:plus, self.class, other.class]
+    DFHack::Settings.new((enabled_pathnames + other.enabled_pathnames).uniq)
   end
 
   def & other
-    p [:and, self.class, other.class]
+    # p [:and, self.class, other.class]
     count = Hash.new 0
-    (pathnames + other.pathnames).each {|pn| count[pn] += 1 }
+    (enabled_pathnames + other.enabled_pathnames).each {|pn| count[pn] += 1 }
     DFHack::Settings.new(count.select {|k,c| c == 2 }.map(&:first))
   end
 
   def ^ other
-    p [:xor, self.class, other.class]
+    # p [:xor, self.class, other.class]
     count = Hash.new 0
-    (pathnames + other.pathnames).each {|pn| count[pn] += 1 }
+    (enabled_pathnames + other.enabled_pathnames).each {|pn| count[pn] += 1 }
     DFHack::Settings.new(count.select {|k,c| c == 1 }.map(&:first))
   end
 
-  def length ; pathnames.length end
+  def length ; enabled_pathnames.length end
 end
 class DFHack::Settings
   include DFHack::StockComparator
@@ -418,9 +418,9 @@ class DFHack::StockpileSettings
 
   def categories ; Hash[self.class.stock_categories.map {|_,m| [m, send(m)] }] end
 
-  def all_items ; categories.map {|_,c| c.all_items }.compact.flatten end
-  def enabled_items ; categories.map {|_,c| c.enabled_items }.compact.flatten end
-  def pathnames ; enabled_items.map(&:pathname) end
+  def all_items ; categories.map {|_,c| c.all_items }.flatten end
+  def enabled_items ; categories.map {|_,c| c.enabled_items }.flatten.compact end
+  def enabled_pathnames ; enabled_items.map(&:pathname) end
 
   def == o
     (enabled_pathnames == o.enabled_pathnames) &&
@@ -501,6 +501,7 @@ module DFHack::StockForwarder
   def all_items           ; settings.all_items end
   def enabled_items       ; settings.enabled_items end
   def pathnames           ; settings.pathnames end
+  def enabled_pathnames   ; settings.enabled_pathnames end
   def length              ; settings.length end
   def copy o              ; settings.copy o end
   def == o                ; settings == o end
@@ -543,7 +544,7 @@ class DFHack::BuildingStockpilest
     links[:workshop ][:give] = self.links.give_to_workshop.to_a unless self.links.give_to_workshop.empty?
     links[:workshop ][:take] = self.links.take_from_workshop.to_a unless self.links.take_from_workshop.empty?
     # lookup all hauling stops to see which ones point here
-    give_stops, take_stops = hauling_stops.
+    give_stops, take_stops = DFStock::hauling_stops.
       map {|h| h.stockpiles.map {|s| [h,s] } }.
       inject(&:+).
       select {|h, s| s.building_id == id }.
