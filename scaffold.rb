@@ -67,6 +67,7 @@ module DFStock
             raise "Ack! Trying to add #{actual_name} to #{stockklass}" unless klass.instance_methods.include?(actual_name)
             klass.class_eval "alias #{base_name} #{actual_name}", __FILE__, __LINE__
           end
+          p [:defining_method, desired_name, :on_class, klass, :from, stockklass, :base_name, base_name]
           klass.send(:define_method, desired_name) {|&b|
             # Cache the item array - it must be linked to the flags array so each stock-settings instance must have its own
             @@instances ||= {} # On the Scaffold module
@@ -77,7 +78,7 @@ module DFStock
                 stockklass.new idx, link: flags_array, category_name: stock_category_name, subcategory_name: desired_name
               }
 
-              # p [:in, desired_name, :on, self, :from, stockklass, :base_name, base_name, :array_length, array.length, :flags_length, flags_array.length]
+              p [:in, desired_name, :as_instance, self, :from, stockklass, :base_name, base_name, :array_length, array.length, :flags_length, flags_array.length]
 
               # raise "Flags array should be as large or larger than the items array" unless flags_array.length >= array.length
               # puts "WARNING: #{stockklass} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
