@@ -92,11 +92,11 @@ module DFStock
 
     def material_flags ms = nil
       return {} unless has_material?
-      cache(:mat_flags) { active_flags(ms || materials) }
+      cache(:mat_flags, material._memaddr) { active_flags(ms || materials) }
     end
     def raw_flags
       return {} unless has_raw?
-      cache(:raw_flags) { active_flags([raw]) }
+      cache(:raw_flags, raw._memaddr) { active_flags([raw]) }
     end
     def raw_base_flags
       return {} unless has_raw? && raw.respond_to?(:base_flags)
