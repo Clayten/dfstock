@@ -67,8 +67,9 @@ module DFStock
     end
 
     def all_items ; arrays.values.flatten end
-    def enabled_items ; all_items.select {|i| enabled? && i.linked? && i.enabled? } end
-    def enabled_flags ; end
+    def enabled_items ; all_items.select {|i| i.enabled? } end
+    def enabled_pathnames ; enabled_items.map(&:pathname) end
+    def enabled_flags ; raise end
 
     def allow_all
       all_items.each &:enable
