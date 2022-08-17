@@ -44,6 +44,17 @@ module DFStock::StockFinder
   def  enable    ; set true  end
   def disable    ; set false end
 
+  def link_array_by_subcategory sc
+    f = features.find {|_,bn,dn,_| (dn || bn) == sc }
+    raise "No such subcategory as #{sc}" unless f
+    nm = 'array_' + f[1].to_s
+    boolean_array = send nm
+    raise "#{stock_category_name} not enabled!" if boolean_array.empty?
+    boolean_array
+  end
+  def set_item subcategory, index, value ;   link_array_by_subcategory(subcategory)[index] = !!value end
+  def get_item subcategory, index        ; !!link_array_by_subcategory(subcategory)[index] end
+
   def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
 
   def find_by_token path_or_subcat, token = nil

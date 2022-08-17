@@ -83,17 +83,8 @@ module DFStock
     def self.material_info type, index ; df::MaterialInfo.new type, index end
 
     # Linkage
-    def link ; @link end
-    def linked? ; link && !link.empty? end
-
-    def check_index
-      raise "#{self.class}: Category #{stock_category_name} is not enabled" unless @category.enabled?
-      raise "#{self.class}: No linked array" unless link
-      raise "#{self.class}: Linked array is empty - did you enable the category?" if link.empty?
-      raise "#{self.class}: Index #{link_index} is out of array bounds (0 ... #{link.length})" unless (0 ... link.length) === link_index
-    end
-    def set x ; check_index ; link[link_index] = !!x end
-    def get   ; check_index ; link[link_index] end
+    def set x ; category.set_item(stock_subcategory_name, link_index, !!x) end
+    def get   ; category.get_item(stock_subcategory_name, link_index)      end
     def  enabled? ; !!(get rescue false) end
     def disabled? ; !enabled? end
     def  enable   ; set true end
@@ -143,7 +134,7 @@ module DFStock
       elsif respond_to?(:type) && type                            ; "#{type}"
       end.upcase
     end
-    def stock_category_name    ; @category.stock_category_method end
+    def stock_category_name    ; category.stock_category_method end
     def stock_subcategory_name ; @subcategory_name end
     def pathname_parts ; [stock_category_name, stock_subcategory_name, token] end
     def pathname ; pathname_parts.join(DFStock.pathname_separator).gsub(/\s/,'_') end
@@ -168,7 +159,7 @@ module DFStock
     end
     def to_s
       refs = references.map {|sc, idx| next if sc == self.class ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
-      "#{self.class.name} name=#{name.inspect} linked=#{!!linked?}#{" enabled=#{!!enabled?}" if linked?} " +
+      "#{self.class.name} name=#{name.inspect} enabled=#{!!enabled?} " +
       "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
     end
     def inspect ; "#<#{to_s}>" rescue super end
@@ -187,6 +178,7 @@ module DFStock
     end
 
     attr_accessor :link_index # redefine this to call another index if needed
+    attr_reader :category
     def initialize index
       # p [:initialize_base, :klass, self.class, :index, index]
       raise "You can't instantiate the base class" if self.class == Thing
