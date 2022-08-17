@@ -69,9 +69,9 @@ module DFStock
           end
           # p [:defining_method, desired_name, :on_class, klass, :from, stockklass, :base_name, base_name]
           klass.send(:define_method, desired_name) {|&b|
-            # Cache the item array - it must be linked to the flags array so each stock-settings instance must have its own
-            # @@instances ||= {} # On the Scaffold module
-            # @@instances[[desired_name, _memaddr]] ||=
+            # Cache the item array - each item must link to its parent category so they may not be shared between instances
+            @@instances ||= {} # On the Scaffold module
+            @@instances[[desired_name, _memaddr]] ||=
             begin
               array = stockklass.num_instances.times.map {|idx|
                 stockklass.new idx, category: self, subcategory_name: desired_name
@@ -80,7 +80,10 @@ module DFStock
               # p [:in, desired_name, :as_instance, self, :from, stockklass, :base_name, base_name, :array_length, array.length, :flags_length, flags_array.length]
               # puts "WARNING: #{stockklass} - the flags array #{base_name} is larger than the #{desired_name} array. #{flags_array.length} > #{array.length}" if flags_array.length > array.length # DEBUG
 
-              def array.[]= i, v ; self[i].set !!v end # Treat the array like one of booleans on assignment
+              # Monkeypatch the array of instances so that assigning to it does not change the content of the array
+              # but instead calls the set method on that instance. This allows the array to be treated as if it was
+              # the enable/disable booleans and manipulated directly.
+              def array.[]= i, v ; self[i].set !!v end
               array
             end
           }
