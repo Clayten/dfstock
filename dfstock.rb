@@ -1,3 +1,24 @@
+# A programmatic way to query and set stockpiles
+=begin
+
+dfstock
+===
+Use the DFStock module and stockpile objects to query/set stockpile items to create the perfect stockflow.
+
+Note::
+  Currently, DFStock is not integrated into DFHack, meaning each command must be prefixed with 'ruby', or 'rb'
+
+Usage::
+  rb DFStock.pile_at_cursor.status
+    [ prints pile status summary ...]
+
+Examples::
+  rb p DFStock::Tree.instances.map {|t| d = t.material.solid_density ; [t.name, d] }.sort_by {|n,d| d }.first(5)
+    [["feather trees", 100], ["papaya trees", 130], ["candlenuts", 140], ["kapoks", 260], ["custard-apple trees", 360]]
+
+  rb pile_at_cursor.food.disable
+=end
+
 $LOAD_PATH << File.dirname(__FILE__)
 require 'thing/thing'
 require 'scaffold'

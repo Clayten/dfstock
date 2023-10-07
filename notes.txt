@@ -1,0 +1,1866 @@
+--- Design notes
+
+The goal started as parsing and editing saved stockpile definitions, then to live manipulation via dfhack, so I looked into protobuf first.
+
+Stock hierarchy modelling was a problem when I tried to find/force a structure onto the items as a way of tracking the Copper is ore #x, but inorganic #y, by translating sub-list index into parent indexes as part of the initialization chain. In the end I solved this much more easily with non-hierarchial classes that lookup their item (by raw, or material, or name) in other classes and simply list equivalences.
+
+Many of the comparators aren't fully correct, and or are mislabeled. The ones required for food and building material got the most testing.
+
+The structure of a dfhack script and how to add it upstream as a multi-file project haven't been dealt with.
+
+--- HaulingStops, Workshops, and stockpile-like mechanics
+
+Stockpiles and hauling stops both use the same selection mechanic. Stockpiles, hauling stops, and (some) workshops, use the same linking mechanic. Workshops don't have a way to discover the stock items they'll take, but it should be fairly easy to hardcode.
+
+Workshops and hauling stops have a method that shows their lings to stockpiles. Stockpiles have a method that shows links to stockpiles and workshops, but not hauling stops. The get_links method provides a consistent interface. It returns the keys (where appropriate) [:stockpiles, :workshops, :hauling], and [:give, :take].
+
+---
+
+Need a tool to split a set of stockpile designations. An A / !A pile. All copper armor below exceptional, and all other armor, etc.
+Might not be able to do so cleanly
+- (All metal armor).split(material: :Copper, below: :Exceptional)
+- Must become (All metal - Copper) and (Copper >= Exceptional), which need to be linked, and (Copper < Exceptional) which is the offshoot
+
+extract all entities, match to stockpile screens. store with details. stock.select(&:edible?)
+
+https://github.com/DFHack/dfhack/blob/8a1979b8a7aecee299c0d74720ee37eeaef9fee5/plugins/stockpiles/proto/stockpiles.proto
+https://github.com/DFHack/df-structures/blob/7a2201dac1caf68366f1d6d778cd0324674d297d/df.buildings.xml
+https://github.com/DFHack/scripts
+https://github.com/DFHack/df-structures
+https://github.com/DFHack/dfhack/blob/master/plugins/ruby/building.rb
+
+https://github.com/DFHack/dfhack/blob/master/docs/Plugins.rst#id64
+
+
+FIXME - Found bug in ruby-protocol-buffers. Repeated fields don't propogate 'changed' from incremental changes, like <<, but only =. This is because simple fields are handled by the message itself but RepeatedFields are their own class and unlike Message, they aren't a subclass of Field::AggregateField so the 'notify_on_changes' logic in Message#initialize_field doesn't get triggered.
+
+Init path
+
+Load Prototype - define structure
+
+[:Message, :self_define_field, :otype, :optional, :type, :bool, :name, :empty_cages, :tag, 1, :opts, {}]
+[:Field_self, :create, :sender_ancestor, [StockpileSettings::AnimalsSet, ProtocolBuffers::Message], :otype, :optional, :type, :bool, :name, :empty_cages, :tag, 1, :opt s, {}]
+[:Field_self, :create, :type_is, :symbol]
+[:Field, :initialize, :otype, :optional, :name, :empty_cages, :tag, 1, :opts, {}]
+...
+[:Message, :self_define_field, :otype, :repeated, :type, :string, :name, :enabled, :tag, 3, :opts, {}]
+[:Field_self, :create, :sender_ancestor, [StockpileSettings::AnimalsSet, ProtocolBuffers::Message], :otype, :repeated, :type, :string, :name, :enabled, :tag, 3, :opts, {}]
+[:Field_self, :create, :type_is, :symbol]
+[:Field, :initialize, :otype, :repeated, :name, :enabled, :tag, 3, :opts, {}]
+...
+[:Message, :self_define_field, :otype, :optional, :type, StockpileSettings::AnimalsSet, :name, :animals, :tag, 1, :opts, {}]
+[:Field_self, :create, :sender_ancestor, [StockpileSettings, ProtocolBuffers::Message], :otype, :optional, :type, StockpileSettings::AnimalsSet, :name, : animals, :tag, 1, :opts, {}]
+[:Field_self, :create, :type_is, :MessageField]
+[:Field, :initialize, :otype, :optional, :name, :animals, :tag, 1, :opts, {}]
+[:Message, :self_define_field, :otype, :optional, :type, StockpileSettings::FoodSet, :name, :food, :tag, 2, :opts, {}]
+...
+
+read_stock - Define actual fields and links
+reading liquid.dfstock (contains LYE and MILK_OF_LIME)
+
+[:RepeatedField, :initialize, :field, ProtocolBuffers::Field::StringField, :field_name, :liquid_misc]
+[:Message, :link_field, :tag, 18, :f_name, :liquid_misc, :value, "", :field_class, ProtocolBuffers::Field::StringField]
+[:RepeatedField, :<<, :self, [], :obj, "LYE"]
+[:RepeatedField, :<<, :self, ["LYE"], :obj, "INORGANIC:MILK_OF_LIME"]
+
+spl.animals
+
+[:Message, :initialize_field, 1, :animals, ProtocolBuffers::Field::MessageField, Dfstockpiles::StockpileSettings::AnimalsSet]
+[:RepeatedField, :initialize, :field, ProtocolBuffers::Field::StringField, :field_name, :enabled]
+[:Message, :link_field, :tag, 3, :f_name, :enabled, :value, "", :field_class, ProtocolBuffers::Field::StringField]
+
+ --- This is where new_value is a String but seems like it should be a RepeatedField so I can link it upstream
+
+spl.animals.enabled << 'snakes'
+
+ruby-protocol-buffers has a bug where RepeatedFields don't propogate changes up. I fixed it with ~15 lines of code to copy the mechanism from other types of fields, but when I was reading the code there were comments talking about the frailty of the methods in general. I'll investigate switching to google-protobuf if it'll still handle v2 messages.
+
+
+# Stockpile code
+I've got the first stockpile manipulation code going, for animals and barely furniture. I don't see the furniture stone/clay category via the stockpile object.
+
+The smarts are in the Creature/Furniture/etc classes, with .provides_honey? and such. This is the basis for the eventual .enable_all_edible_items
+
+I want to metacode this because it's all lists where an index is looked up, and flags. I've scaffolded a bit, where  add_array(desired_name, actual_name) {|idx| Klass.new idx }
+
+adds: each_{desired_name}, which instantiates the objects.
+
+Also adds get_{dn}/set_{dn} which take indexes.
+
+Or do I go with each_x {|bool| and each_x_object {|object|? What make it most composable? For a map operator to work I basically need to operate on the raw booleans primarily.
+
+stock.animals.each_animal {|b| p b }
+stock.animals.map_animal! {|b| !b }
+stock.animals.each_animal.each_with_index {|b,idx| ?? }
+stock.animals.each_animal_object {|a| a.enable if a.token =~ /TOAD/ }
+stock.animals.select_animal /TOAD/
+stock.animals.enable_animal /HONEY/
+stock.animals.disable_animal /BADGER/
+stock.animals.each_animal_object {|a| a.set(a.grazes? && a.provides_leather) }
+
+Thing < StockThing (ex Animal) can be used to enable/disable that stock option provided its link to its parent isn't broken.
+
+How would Pile.map! {|obj| } work? Is it worth making work? Would it loop over the list and lookup and set those and only those objects, or would it require the appropriate nulls/falses for unselected items, and just treat the object as a true?
+
+What's the reason for the each_animal vs .enabled? Or at least aliasing .animals to .enabled? But why not return the raw object from the easy method?
+
+In the case of Animals, enable_animal can be alias to enable, etc, but for furniture and others, enable_type and enable_material conflict, or do they...? Maybe it's up to you to notice if it's a problem. (Like /wood/ is in an item name)
+
+Does .animals list all possible animals, or just the enabled ones? .animals_enabled/.animals_disabled could be just those? .all_animals?
+
+Went with .animals so it composes. wrap(:animals, :enabled)
+
+I won't support .map!, it seems like too much work for no benefit.
+
+Stones are represented as an array of 307 booleans, but most are unused.
+161-247 + 264
+
+On-screen they're grouped into Ore/Economic/Other/Clay but their indexes are somewhat scattered.
+Clay: 244-247 + 264
+Other: 161-166 + 168 + 170 + 172-184 + 199-200 + 204-210 + 212-220 + 222-225 + 227-229 + 231-234 + 236 + 240-243
+Economic: 167 + 169 171 + 185 + 196-197 + 203 + 230 + 235 + 237-239
+Ore: 186-195 + 198 + 201-202 + 211 + 221 + 226
+
+This holds for other types of materials in other places, the screen has them grouped differently. Some are all of one vector, others share another.
+
+It's odd that the material index and the stone index don't match up. I select the stones, from the materials, instead of providing a sparse list. There's an ore[0], economic[0], etc, and they're from various places in the mat-list, and are selected from their .ore? and .economic? flags.
+
+It would be another type of confusing to have a sparse array of each, where most spots where nil, but all were in the correct mat-index. I should just expose 'mat_index' on the object.
+
+
+  # Organics - each category has a different length
+  # df::MaterialInfo.new cat, id
+  # cat_num = DFHack::OrganicMatCategory::NUME[cat_name]
+  # mat_type  = df.world.raws.mat_table.organic_types[  cat_num][cat_index]
+
+  # Leather? Into an array of df.world.raws.mat_table.organic_types[Leather] materials - Not sparse
+  # Wood? df.world.raws.plants - Sparse - plant.flags[:tree]
+  #
+  # Stone is a sparse index into an array of 307 df.world.raws.inorganics
+  # What else is into the same array? Metals.
+  #
+
+STOCKPILE.settings.flags.[weapons|armor|etc] = true/false
+
+
+These aren't Items, Materials, etc. They're MaterialStock, etc. The question is not, is_metal?, perhaps many things are metal which are not stockpiled_as_metal?.
+
+Sometimes array are one-for-one, such as FurnitureTypes, there is one boolean for each possible choice.
+
+Sometimes arrays are sparse, like wood, where not all plants are trees but there's a boolean for each.
+  - A further complication there is that not all trees produce wood.
+
+Sometimes arrays are the one-for-one result of a query, such as seeds, where there's a boolean for each plant with a seed, but the link number is not the same as the plant number.
+
+Sometimes arrays are the many-to-one results of a query, such as food/fruit_leaves, where capers show up three times
+
+Sometimes arrays are a 1-to-1 query of a sparse array, such as eggs, over creatures.
+  - This one is difficult, because (Egg < Creature) keeps an egg_index, and Creature keeps a creature_index, but when creature calls super is gets the creatures_index, because it's a sparse index as well. Then it sets the @index to the creature_index, and that doesn't exist in the egg array. The trick seems to be setting @index manually at the end of the Egg initializer.
+
+
+#   # All lists and flags together, in one list of [cat:subcat:name,v] pairs. Or, just a list of 'c:s:n', and you query for the values? Is it only the true values?
+# # require 'protocol_buffers'
+# #   # The goal is to toggle stock by specific item, by material, or by regex, and globally or in a category
+# #   # Also, to toggle the flags (category X, allow plant, etc) and set the numeric options (wheelbarrows, etc)
+# #   #
+# #   # Also desired is a way to split a stockpile, to ensure that every item in the one is represented in two or more
+# #   # piles that are intended to take from the first, cleanly separating goods.
+# #   #
+# #   # ex:
+# #   # pile = Stockpile.new
+# #   # pile.accept(/hammer/)
+# #   # pile.accept(:weapons, type: [:wood!]) # not wood weapons...?
+# #   # pile.forbid(/sword/, :food) # forbids swordferns from food, ignores :weapons category.
+# #   #
+# #   # modifiers - material, quality, ...?
+# #   # The theoretical concept of a stockpile, not the physical implementation
+# #     # Read material data by introspection of the running instance of DF
+# #     # Things like - is_food, is_millable, etc.
+# #     def self.read_dwarf_data
+# #     # Categories can be enabled without any items selected - eg. a food stockpile that accepts nothing but still prevents spoilage
+# #     # FIXME implement enable/disable - @set_fields?
+# #     def  enable_category cats ; categories.each {|cat|  enable cat } end
+# #     def disable_category cats ; categories.each {|cat| disable cat } end
+# #     # By path, eg: 'food,plants,wheat'
+# #     # set('food,prepared_meals', true)
+# #     #    add('food,meat,POND_GRABBER_SPLEEN')
+# #     # remove('food,meat,POND_GRABBER_SPLEEN')
+# #   # bars/iron
+# #   # furniture/tables/masterwork/iron
+# #   # food/prepared
+# #   # seeds/plump-helmet
+# #   # Is Stock a specific thing, or a class of things?
+# #   # Can two stock-types be combined? table/iron AND table/rock?
+# #   # Can types be subtracted? table/rock - table/obsidian - table/masterwork
+# #   # Are modifiers a thing which can be added removed?
+# #   # table + masterwork
+# #   # Are All and None special?
+# #   # All - table/iron/masterwork
+
+
+Code direction, separate DF hierarchy (Builtin, Inorganic/Stone/Ore, etc) from the stockpile layouts. Where it's handy, borrow the lists as now, but where it's not handy at least the stock object will be okay with pointing to an inorganic OR a builtin as MiscLiquid does, but the current code handles awkwardly.
+
+Pile-descripton code:
+Is there a distinct letter for each category? Animals, Food, fUrniture, Refuse, Stone, Ammo, Coin, BarsBlocks, Gems, finishedGoods?, Leather, Cloth, Wood, Weapons, Armor, Sheet
+
+Food/Furniture/FinishedGoods conflict
+Wood/Weapons
+Ammo/Armor
+Coin/Cloth
+
+St:Ore, or just Ore, because it's unique?
+F:-/Milk/ (or just F-Mil or even -Milk somehow)
+W:Feather # Feather-tree wood
+
+How will the plugin be used? For specific items by name (fat/tallow)? Or by function (edible_cooked vs processed_by_cooking (eg fat))?
+
+My two main goals were ore/bars into and from armor/weapon/finished-goods handling and smelting, and food, especially seeds.
+
+It seems like the main use is to distinguish between two items on facets other than their name, like egg_laying, leather_producing, edible_raw, produces_iron, etc.
+
+For wood, you'd want to differentiate on color and weight. Mainly at least. Similarly for stone, and Blocks.
+
+For bars you care about reaction products. Which I suppose is true about stone too.
+
+For gems and metals you care about value. For metals you also care about color, and ability to use for armor and weapons.
+
+
+On graphs, can I wrap building descriptions like I do materials/raws for stock items? Then link shops and piles together (+ farms, zones, etc) and display as a graph.
+
+--------- Stockpile Notes
+
+I've already broken out the classes into separate files. (Not current, don't use...) Just to see what's going on. /classes
+
+The mod - using it...
+
+Erf, it's hard.
+
+in dfhack:
+  rb S = BuildingAtCursor.first # Of course, with the cursor on a stockpile. If, it's the only building/zone covering the area
+  rb S.stone.enable # Yay!
+  rb S.stone.clay.disable ?? No?
+    Sub-categories are dark/medium/light gray depending if none, some, or all items are selected
+      There's no good way yet to see this. S.status() is coming.
+
+  rb S.stone.clay.mats[0] = true # turn on the first clay
+
+  rb S.stone.stones[0].enable
+
+
+Enabling leather via the mod doesn't enable the category the way the UI does - the other columns remain blank. It might cause instability.
+
+It needs a visual way to narrow down into useful describes. Like, weapons - what we can use - what we can make - that don't suck. Food items - that are edible + unhealthful - that can be cooked. And so forth. And where relevant, automatic linkage with the appropriate feeder/target piles when they're all created. For example, An 'all armor' pile pulls from the 'All Stuff' pile and feeds to 'Wanted Armour', 'Sale Armor', and 'Trash Armor' piles.
+
+Give Things a length instead of calling index_translation.length on them.
+
+Validate that a created thing is within bounds.
+--
+
+Stockpile bug - should be 'Toad Man Leather', but instead is 'Toad Woman Leather'. Oops.
+- Creature < Thing ; token (name) is defined as creature.caste.first.
+fixed.
+
+
+StockItem.to_s prints out an 'inspect' block, incrementally.
+#<DFStock::Egg (< Creature < Thing)
+linked= ... # Does this objects enable/disable method link to a given stockpile?
+index= ... # printed in Thing, at the bottom of the hierarchy
+creature_index= 5 # Bluejay - printed in Creature
+egg_index= 0 # the first egg is from creature_index 5...
+>
+
+s = some_stockpile
+s.categories
+s.categories[1] == s.food
+
+
+Scaffold needs to add 'categories()' or such. Food should have 19, :meat, etc. Like flags() containing :prepared_meals.
+Should return the method name and the proper name. Ideally from introspection.
+Also, the categories should know their names. bars_blocks -> 'Bars/Blocks'.
+
+There are 39 organic_categories and food_mat_index-es and 19 food stockpile categories.
+
+Many names aren't right. Meat, for example.
+'Meat', meat[0].material.meat_name -> ['meat', 'meat', ''].
+'Toad meat', meat[2].material -> ..
+
+
+Enabled/Disable
+Animals doesn't properly reenable all the items
+Food can't enable the subcategories
+Furniture doesn't properly reenable all the items
+Corpses # ???
+Refuse # crashes on enable
+... I've stubbed these out to block them being used. Currently you have to manually turn on everything and the script can turn off what it doesn't want.
+
+
+Stockpile
+  Food/Plants doesn't match, the last thing should be Whip Vine and instead I get Velvet Grass. WV's fmi is 192, VG's is 111.
+  Food/Drinks doesn't match, Mango is 75/75/75 but Plant 75 is Turnip and Mango is 220...
+
+[DFHack]# rb rehack ; p DFStock::Plant[/whip/].first
+#<DFStock::Plant linked=false token="whip vine" index=192 plant_index=192>
+[DFHack]# rb rehack ; p DFStock::PlantDrink[/whip/].first
+#<DFStock::PlantDrink linked=false token="Whip Wine" index=74 plant_index=74 plantdrink_index=74>
+
+Items - index, enable every %6==0
+Animals desyncs somewhere around Cavies
+Food/Plants after raspberries
+Furniture/Stone/Clay at the beginning
+Furniture/Metal after adamantine
+Refuse/Item Types entirely
+Refuse/Corpses+Parts+Skulls+Bones+Shells+Teeth+Horns+Hair after Cavy
+Stone/Ores+Economic+Other+Clay
+Ammo/Metal after adamantine
+Coins all
+Bars/Metal
+Blocks/Metal+Stone
+Gems all
+Finished/type+stone+metal+gem
+Wood all
+Weapons/metal+stone
+Armor/metal
+
+For animals, food, wood, stone, etc, the plugin is useful for querying item properties such as color and cookable?, but for furniture it more requires that you know what you want, 'food storage' not 'boxes', because there don't seem to be useful things to query, or raws to do it from.
+
+# Print and disable the last item in each category.
+rb P.settings.categories.each {|ck, c| c.arrays.each {|ak, a| i = a.last ; p [:check, ck, ak, i] ; next unless i ; i.set false } }
+
+Stock classes need an audit. I've forgotten how they're supposed to work and a lot of them are out of date, functional only by accident. Then a few methods need to be moved into Thing, to automate index. What's the minimal set of methods needed?
+
+From the Template example, to_s can be automated in an .inherited hook for each parent, and index can be handled only once. The attr_reader for classname_index. instances can be scaffolded from 'pluralname', but not the other way because of pluralization.
+
+How important is naming everything LastClassInChain.lastclassinchains, as opposed to LCIC.instances? Only the indexes matter, where you want the ability to get a plant index from a plantpowder, for instance. But the types, etc? They should all be via the instance, not just public class methods.
+
+How should it work? Via inherited, or class methods like attr_reader?
+.inherited
+-> initialize
+-> to_s ; n = "#{classname.lowercase}_index" ; super + " n=#{send n}" end
+-> index
+'organic_category :Leaf'
+-> category ; :Leaf end
+-> types ; org_cat category end
+-> material_infos ; types.map {|t,i } end
+-> raws ; ... end
+'parent_indexes {|i| find_plant_index raws[i] }'?
+-> indexes ; [1, 3, 5] end / instances ; indexes.each_index.map {|i| new i } end
+
+How many classes of things from things are there.
+
+Creature is a direct list of the raws, but Animal is a subset based on .stockpile_animal? which is complex.
+
+Food/Meat is an organic category (:Meat)
+Food/Plant is a subset of a category (:Plant && .crop?)
+Stone/stones - all mats share an array?
+Furniture/type - An ENUM whose names don't perfectly match - no parent class
+*/OtherMaterials - Varies...
+
+Creature / Plant / Inorganic / Item / Builtin / Thing-directly
+Leather and Stone are the only two-level hierarchies
+
+It looks like (in scaffold) I'm only using .index_translation for the number of instances, not for their parent index. If I'm now trying to handle that via raw searching, so I need the method?
+
+I need meta programming for the case where a method in a class needs to depend on its direct parent, and not via 'super'. (Why not .index ; super || ... end?  Just for debugging? Is it ever helpful in code, or would you just instantiate a higher version (Stone from Ore) of an object via its name?) So anyways, method directparent_index was an accessor to the instance_variable, but on a subclass its a calculation of what its parent index should be, to be used at creation, in initialize, to pass up to the chain to the base class. This base value is with some classes the link index, and in other classes its the subclass index, or other blended and more-painful things.
+
+Inherited runs once, at class creation, before the body of the class.
+A scaffolding method (ex: organic_category) is like attr_accessor, and runs during class creation, when called as part of the class body.
+Methods defined on the parent class (Plant, Inorganic, etc) can be redefined in each child and can use super.
+
+Organic/Plant is based on categories, most of which correspond to stock categories. Inorganic is one large list and stock categories are determined by its members flags, material.flags[:is_gem] for instance. To instantiate an organic class, simply look up the material type+index, get its raw from its material_info, and done. To instantiate an inorganic subset, all inorganics must be instantiated and checked.
+
+Plant, Creature, and Inorganic are the three main types. I need a way to select a category (if available) and subset of those, as well as a way to link to a parent category. All three have raws and support find_by_raw. This works for organic_category where I get an array of type/index pairs which I can turn into a material_info, and get a raw from the .plant/.creature/.inorganic method. For inorganics I start at the raws and filter. Except for MetalThread which has an organic_category which I should use, which starts via the material... And creatures are both, there is a creatures array of which a subset are suitable for stockpiling as animal, and a number of organic_category arrays of materials (egg, meat, etc). I need a way to merge the two, so for meat (for example) I use the category to find the right item, but refer to the parent class (Creature) which used the creature array.
+
+In the case where one class is a subset of another, and via a selection algo (ie is_stone?) instead of a category, the XYZ_indexes method which is a sparse list of the parent indexes where they correspond with the current class, is handy. Is it globally useful and can it be usefully generated for the other classes?
+
+Builtins (glass, etc) are based on materials, but have no raws.
+
+Stock classes will all root to raws (Plant, Creature, Inorganic), Materials (Builtin), or typeless lists (Quality, Furniture, etc).
+
+Currently in Klass1, klass1_index is an attr_reader, but when Klass2 < Klass1 it overwrites that with a method which looks up Klass1 from Klass2's raw. This only needs to happen once, for the call to super in initialize, and the method wouldn't need to be overriden.
+
+Argh! organic_types(:Eggs) are messed up!! Instead of [type, idx] they're [idx, caste]! I will need a creature_index method here to override so I'll need to either use that in the scaffolded .initialize, or redefine .initialize especially for Egg. If creature_index is the attr_reader then I need creature_index_override, or something...
+
+Two meats aren't creatures, they're plants. Argh! I can easily return their raws, but I can't find a creature_index is there is no such creature... I can fix this by not having Creature as a parent class. Then this would be a fairly simple exercise with 'category_based'.
+
+The difficulty is the hierarchy. Knowing that Ore 2 is Stone 47 and Inorganic 109, or whatever. If that wasn't a goal, or if a membership in other classes was a dynamic thing. Like, it looks your raw up in all classes and shows the index in each of those, but there was no hierarchy.
+
+The problem with raw_subset(:inorganic) {|x| x.is_ore? } is that the checks are written for an instance of Thing, not a raw, and this is desired so that you can select the instances with the same code you query the instances with.
+
+Name inconsistencies between the code and the game:
+Gems/(Rough|Cut)Gem use plural and FinishedGoods/Gems uses singular
+Cloth/Thread* ends with 'Thread' and Cloth/Cloth* ends with 'Cloth'.
+
+# Prints all categories and all array and the first item in each
+rb rehack ; reinherit ; ccache ; P.settings.categories.each {|k,c| c.features.each {|t,n1,n2,k2| next if t == :flag ; n = n2 || n1 ; i = c.send(n).first ; p [k,i.token] if i } if c.respond_to?(:features) }
+
+finished_goods/type is 112 units long but there are only 25 types. I wonder if the locations can be discovered. Solved manually for now.
+
+--- Serialization
+
+I want to change the current .token into .name, and have it represent what you see in game. Then add .id where there's a raw, and finally .pathname which is what you could use to set a pile from. pile2.from_s(pile1.to_s). The stock item, while instantiated and linked into a settings object, needs to know how to refer to itself unambiguously, despite being the same type (ie OtherMaterial) as another list entry. Armor/Metal/Iron is different from Weapon/Metal/Iron. Qualities too, core/standard vs total/standard. Where is this defined? How are multi-level screens (weapons) handled?
+
+.name -> 'IRON', .pathname -> 'ARMOR/MATERIAL/IRON'
+
+Handled by passing in to items their category (Food) and subcategory (Meat) at creation. Doesn't handle items created without a stockpile as that's where they get their definition.
+
+i = Q.all_items.sample ; p i.pathname ; p P.find_by_pathname i.pathname
+"FOOD,MEAT,CREATURE:NIGHT_CREATURE_11:KIDNEY"
+#<DFStock::Meat name="horned woman prepared kidney" linked=true enabled=true creature_index=878 fat_index=1638 leather_index=627 parchment_index=627 link_index=9795 meat_index=9795>
+
+P.categories.each {|cn,s| s.features.select {|t,_,_,_| t == :array }.each {|_,n1, n2, o| sn = n2 || n1 ; i = s.send(sn).first ; p [cn,sn,(i.pathname if i)] } }
+["animals", :animals, "ANIMALS,ANIMALS,TOAD"]
+["food", :meat, "FOOD,MEAT,PLANT:WORMY_TENDRILS:STRUCTURAL"]
+["food", :fish, "FOOD,FISH,CUTTLEFISH:SKIN:FEMALE"]
+...
+["furniture", :metals, "FURNITURE,METALS,IRON:IRON"]
+["furniture", :quality_total, "FURNITURE,QUALITY_TOTAL,STANDARD"]
+["stone", :ore, "STONE,ORE,HEMATITE:HEMATITE"]
+etc
+
+
+--- Bugs
+
+* Won't load without a DF world loaded - this should be more user-friendly
+
+* Crashes when trying to look at disabled pages. Can't link to an empty flags array.
+- What should happen? I guess, link no items
+
+--- Stockpile code breakout
+- used git filter-repo, moved to dev/dfstock/
+- readme.txt imported into notes
+
+      To use, create a DFStock::TypeMod module, where Type is the stockpile type. Stone, Food, etc.
+      Extend Scaffold, and use 'add_array' and 'add_flag' to describe the DF Stockpile.
+
+      ex:
+      To write the Bars and Blocks handler examine a stockpile object with this category disabled and you see four arrays:
+      => #<StockpileSettings_TBarsBlocks bars_other_mats=[] blocks_other_mats=[] bars_mats=[] blocks_mats=[]>
+
+      Now enable the stockpile category and you will see:
+      => #<StockpileSettings_TBarsBlocks bars_other_mats=[true, true, true, true, true] blocks_other_mats=[true, true, true, true] bars_mats=[true,
+
+      The empty arrays have been replaced by arrays of booleans which represent the actual stock items.
+
+      The object shows four categories, but the stock UI shows five. Two of them share the same array of booleans.
+
+      module BarsBlocksMod
+        extend Scaffold
+        add_array(Metal,              :bars_metals,   :bars_mats)
+        add_array(BarOtherMaterial,   :bars_other,    :bars_other_mats)
+        add_array(CutStone,           :blocks_stone,  :blocks_mats)
+        add_array(Metal,              :blocks_metals, :blocks_mats)
+        add_array(BlockOtherMaterial, :blocks_other,  :blocks_other_mats)
+      end
+
+      Here we've scaffolded a Ruby accessors to match the UI. Two accessors (blocks_stone and blocks_metal) use the same backing array, blocks_mat.
+
+
+      Usage:
+
+      In day-to-day use, you access a category and enable/disable items based on their properties.
+
+      S = <a stockpile> # With bars/blocks disabled
+      S.bars_blocks
+      => #<StockpileSettings_TBarsBlocks bars_other_mats=[] blocks_other_mats=[] bars_mats=[] blocks_mats=[]>
+
+      The stockpile category is disabled, so the backing arrays are empty. You cannot enable/disable anything yet.
+
+      Query the types:
+      S.bars_blocks.bars_metal.length
+      => 36
+      S.bars_blocks.bars_metal.first
+      => #<DFStock::Metal linked=false token="iron" index=0 metal_index=0>
+
+      Note that the object is not linked. This means you may query it, but it cannot be used to enable/disable a stock item. Enable the category in the UI and rerun the command.
+
+      S.bars_blocks.bars_metal.first
+      => #<DFStock::Metal linked=true enabled=true token="iron" index=0 metal_index=0>
+
+      Now the item is linked, and the item is enabled in the UI.
+
+      S.bars_blocks.bars_metal.first.set(false)
+      S.bars_blocks.bars_metal.first
+      => #<DFStock::Metal linked=true enabled=false token="iron" index=0 metal_index=0>
+
+      Now the item will be unselected in the UI.
+
+
+
+      Bugs / Issues:
+
+      Can't enable a stockpile category: The category is highlighted but the sub-categories can't be permitted/forbidden and they contain no items, evn grayed out.
+
+      Can't enable/disable a sub-category
+
+      No convenience-methods like Food.cookable
+
+      DFHack doesn't support the 'corpses' category
+
+      DFStock::Tree.trees are actually Plants
+      to get a Tree you need to look in stockpile.wood.trees
+      Fixed. Trees are now trees.
+
+      Are any other things actually their base class?
+
+      Thing
+        MaterialInfo
+          Material
+        Raw
+          Material_Defs
+
+      Creature
+        creature_raws
+
+      Plants
+        plant_raws
+
+      Inorganic
+        inorganic_raws
+
+
+
+      [DFHack]# rb p DFStock::Tree.trees[53].material.food_mat_index.to_hash.reject {|k,v| v == -1 }
+      {:Wood=>51}
+
+      [DFHack]# rb p DFStock::CreatureCheese.creaturecheeses[1].material.food_mat_index.to_hash.reject {|k,v| v == -1 }
+      {:CreatureCheese=>1, :EdibleCheese=>1}
+
+      How do you do from a Material to a MaterialInfo, and to an instance of a thing (Creature...)?
+
+      There are multiple ways to define a category
+
+      By querying the parent class items:
+        class PlantPowder < Plant
+          def self.plantpowder_indexes ; cache(:plantpowders) { plants.each_with_index.inject([]) {|a,(x,i)| a << i if x.mill? ; a } } end
+
+      By querying the category
+        class PlantDrink < Plant
+          def self.plantdrink_category ; organic_category :PlantDrink end
+          def self.plantdrink_types ; organic_types[plantdrink_category] end
+          def self.plantdrink_material_infos ; plantdrink_types.map {|(c,i)| material_info c, i } end
+
+      I use both... Not sure which is best.
+
+      DFStock::Quality.new(0).is_magma_safe?
+      Perhaps I should have an AbstractThing class without raws, materials, etc.
+
+      Note that Refuse/Bones(etc) are 'Animal', not organic_cat[:Bones]...
+      All refuse categories are the same size
+
+      Piles should have .enabled, etc, which lists the enabled items.
+      - And which conflicts with animals.enabled, the base array...
+
+      What to call the methods ...?
+      Ideally, exactly what the game does.
+
+      Weird naming cases.
+        Animal.enabled vs Wood.mats
+        Armor.head is the base, and ideal, name - Non-sparse list of just head armor
+        Armor.metals is the better name, from sparse list Armor.mats
+
+      Furniture types and Finished Goods types
+      Furniture:
+      Minecart - df.world.raws.itemdefs.all[63] -> #<ItemdefToolst id="ITEM_TOOL_MINECART" ...
+      ["wheelbarrow", 64]
+
+      Thing reorg:
+        P = Plant.plants.find(/nether/) ; P.wood -> no_such_method
+        T = Tree.trees.find(  /nether/) ; T.wood -> materials.find(/WOOD/)
+        .wood needs to go on Plants, or even Thing, and return nil when not applicable and false only when (like Banana) the plant could but does not produce wood
+
+        Perhaps a hierarchial set of modules, module TreeStuff ; end  module PlantStuff ; include TreeStuff ; end  module Thing ; include PlantStuff ; include ...
+
+        The use-case of this would be operating on all items without needing to filter them first. ex. Before flooding an obsidian-processing floor, to un-select stock items that would be damaged by magma. Instead of iterating over every category and treating it separately, you simple write pile.all_items.each {|i| i.set i.is_magma_safe? }
+
+
+      ammoothermaterial_items ; ['Wood', 'Bone'] end
+      barothermaterial_items
+        [
+          Builtin.new(7).material, # Coal
+          Builtin.new(8).material, # Potash
+          Builtin.new(9).material, # Ash
+          Builtin.new(10).material, # Pearlash
+          Creature.new(0).materials[21] # Soap
+        ]
+      end
+      blockothermaterial_items ; ['Green Glass', 'Clear Glass', 'Crystal Glass', 'Wood'] end
+      weaponothermaterial_items ; ['Wood', 'Plant Cloth', 'Bone', 'Shell', 'Leather', 'Silk', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn'] end
+      furnitureothermaterial_items ; ['Wood', 'Plant Cloth', 'Bone', 'Tooth', 'Horn', 'Pearl', 'Shell', 'Leather', 'Silk',
+                                               'Amber', 'Coral', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn'] end
+      finishedgoodsothermaterial_items ; ['Wood', 'Plant Cloth', 'Bone', 'Tooth', 'Horn', 'Pearl', 'Shell', 'Leather', 'Silk',
+                                                   'Amber', 'Coral', 'Green Glass', 'Clear Glass', 'Crystal Glass', 'Yarn', 'Wax'] end
+      finishedgood_items ; ['chains', 'flasks', 'goblets', 'musical instruments', 'toys', 'armor', 'footwear', 'headwear',
+                                     'handwear', 'figurines', 'amulets', 'scepters', 'crowns', 'rings', 'earrings', 'bracelets',
+                                     'large gems', 'totems', 'legwear', 'backpacks', 'quivers', 'splints', 'crutches', 'tools', 'codices'] end
+
+      amulets, armor, backpacks, bracelets, chains, codices, crowns, crutches, earrings, figurines, flasks, footwear, goblets, handwear, headwear, large gems, legwear, musical instruments, quivers, rings, scepters, splints, tools, totems, toys
+
+      Amber, Ash, Bone, Clear Glass, Coal, Coral, Crystal Glass, Green Glass, Horn, Leather, Pearl, Pearlash, Plant Cloth, Potash, Shell, Silk, Soap, Tooth, Wax, Wood, Yarn
+
+      Builtin < Thing
+      Glass < Builtin
+      MisqLiquid refers to Builtin
+      BarOtherMaterials refers to Builtin
+
+      Creature < Thing
+      Animal, Meat, Fish, UnpreparedFish, Egg, CreatureDrink, CreatureCheese, CreaturePowder, Silk, Yarn, Fat, CreatureExtract, Leather < Creature
+      Pressed refers to Creature
+
+      Inorganic < Thing
+      Metal, Gem, CutStone, Stone < Inorganic
+      Ore, EconomicStone, OtherStone, Clay < Stone
+      MisqLiquid refers to Inorganic
+
+      Item < Thing
+      Ammo, Weapon, TrapWeapon, ArmorBody, ArmorHead, ArmorFeet, ArmorHand, ArmorLeg, ArmorShield < Item
+
+      Leather < Creature
+      Parchment < Leather
+      WeaponOtherMaterial, FurnitureOtherMaterial, FinishedGoodsOtherMaterial refers to Leather (* as an abstract)
+
+      Plant < Thing
+      PlantProduct, PlantDrink, PlantCheese, PlantPowder, FruitLeaf, Seed, Paste, PlantFiber, Paper, Pressed, PlantExtract, Tree < Plant
+      WeaponOtherMaterial, FurnitureOtherMaterial, FinishedGoodsOtherMaterial refers to Plant ("Plant Cloth")
+
+      Thing
+      Builtin, Inorganic, Creature, Inorganic, Item, Plant < Thing
+      Furniture, MisqLiquid, AmmoOtherMaterial, BarOtherMaterial, BlockOtherMaterial, WeaponOtherMaterial, FurnitureOtherMaterial, FinishedGoodsOtherMaterial, FinishedGoods, Refure, Quality < Thing
+
+
+      ./dfhack/plugins/ruby/material.rb
+              CREATURE_BASE = 19
+              FIGURE_BASE = CREATURE_BASE+200
+              PLANT_BASE = FIGURE_BASE+200
+              END_BASE = PLANT_BASE+200
+
+              # interpret the mat_type and mat_index fields
+              def decode_type_index
+                  if @mat_index < 0 or @mat_type >= END_BASE
+                      @mode = :Builtin
+                      @material = df.world.raws.mat_table.builtin[@mat_type]
+
+                  elsif @mat_type >= PLANT_BASE
+                      @mode = :Plant
+                      @plant = df.world.raws.plants.all[@mat_index]
+                      @material = @plant.material[@mat_type-PLANT_BASE] if @plant
+
+                  elsif @mat_type >= FIGURE_BASE
+                      @mode = :Figure
+                      @figure = df.world.history.figures.binsearch(@mat_index)
+                      @creature = df.world.raws.creatures.all[@figure.race] if @figure
+                      @material = @creature.material[@mat_type-FIGURE_BASE] if @creature
+
+                  elsif @mat_type >= CREATURE_BASE
+                      @mode = :Creature
+                      @creature = df.world.raws.creatures.all[@mat_index]
+                      @material = @creature.material[@mat_type-CREATURE_BASE] if @creature
+
+                  elsif @mat_type > 0
+                      @mode = :Builtin
+                      @material = df.world.raws.mat_table.builtin[@mat_type]
+
+                  elsif @mat_type == 0
+                      @mode = :Inorganic
+                      @inorganic = df.world.raws.inorganics[@mat_index]
+                      @material = @inorganic.material if @inorganic
+
+give Things methods for @category_name and @subcategory_name, and also link to the thing's category object.
+
+
+The reasons for some of the patterns I've been using
+
+# Example 1 - The Stone pile
+
+class Thing
+  attr_reader :index # This is the index used to write into the linked array
+  def initialize index
+    @index = index # When the index is received here it must be within the bounds of the linked array!
+  end/
+class Inorganic < Thing
+  def initialize index
+    @inorganic_index
+    super # 'Thing' doesn't have an index-space of its own
+  end/
+class Stone < Inorganic
+  ...
+  def inorganic_index ; self.class.stone_indexes[stone_index] end # 1) If needed, a translation to the parent indexes
+  def initialize index ...
+    @stone_index = index
+    super inorganic_index # 2) Translate what gets passed to the parent class
+  end/
+
+class Ore < Stone
+  def stone_index ; self.class.ore_indexes[ore_index] end # 1) Each child repeats the process
+  ...
+    super stone_index # 2)
+  ...
+end
+
+as compared to armor types which are lists of all items of that class (Armor vs Helm vs Shield)
+
+class Item < Thing ; end # ~200 items
+class ArmorHead < Item # 14 armor items
+    def self.armorhead_indexes ; items.each_with_index.select {|x,i| x.raw.class == DFHack::ItemdefHelmst }.map {|x,i| i } end
+    def item_index ; self.class.armorhead_indexes[armorhead_index] end
+    def raw ; self.class.item_raws[item_index] end
+    def initialize index, link: nil
+      @armorhead_index = index
+      super index, link: link
+  ...
+end
+
+In both cases (Ore vs ArmorHead) the number of class items is limited, and must be referred to as (0...n). Both also point into larger type arrays.
+
+The difference is if they are stored sparsely (Ore) or compact (ArmorHead).
+
+Ore entries are stored alongside and between EconomicStone, etc, in an array large enough to reference each Inorganic. The game treats each subset of this array as if they were distinct for purposes of highlighting labels for empty/partial/full, but in fact there is only one 'mats' array that all four visible lists share.
+
+Armor(Type) entries are stored in separate lists, just long enough for the available entries.
+
+* To further complicate things, sometimes the game switches it up. The gem/cut stone category is a compact list of just the inorganics flagged is_stone (which is mostly but not entirely the same as the Stone/Ore/etc stockpile classes).
+
+In both these cases the correct code is shown, to translate your index into your parent's index-space if you share a larger array, and to pass your index unchanged and simply override your parent's index with a subclass method if the array is sized for your types.
+
+The symptom if this isn't done right depends on which way you get it wrong. If you forget to translate Ore indexes into Stone, and so on, then you'll only be changing the first OreTypes.length elements of the 'mats' array, which probably aren't even in any list, so there won't be a visible outcome.
+
+If you accidentally translate a compact index into its parent index-space you'll extend the array of booleans to include that index and all in between and then write that back into the DF memory space which causes unpredicatble memory corruption. This can be a crash now or later, or something unknown.
+
+--
+
+> df.methods - parent_methods
+...
+:selected_stockpile_type
+:selected_stockpile_type=
+...
+:stockpile
+:stockpile=
+
+[DFHack]# rb p df.constants.map {|cn| c = df.const_get cn ; [(c.is_a?(Class) ? c : c.class).ancestors[1], cn] }.sort_by {|a,b| [a,b].to_s }.each {|a,b| p [a,b] }.map {|| }.compact
+[DFHack::Building, :BuildingStockpilest]
+...
+[DFHack::MemHack::Compound, :ItemStockpileRef]
+...
+[DFHack::MemHack::Compound, :PlantRaw_TStockpileGrowthFlags]
+...
+[DFHack::MemHack::Compound, :RouteStockpileLink]
+[DFHack::MemHack::Compound, :RouteStockpileLink_TMode]
+...
+[DFHack::MemHack::Compound, :StockpileGroupSet]
+[DFHack::MemHack::Compound, :StockpileLinks]
+[DFHack::MemHack::Compound, :StockpileSettings]
+[DFHack::MemHack::Compound, :StockpileSettings_TAmmo]
+[DFHack::MemHack::Compound, :StockpileSettings_TAnimals]
+[DFHack::MemHack::Compound, :StockpileSettings_TArmor]
+[DFHack::MemHack::Compound, :StockpileSettings_TBarsBlocks]
+[DFHack::MemHack::Compound, :StockpileSettings_TCloth]
+[DFHack::MemHack::Compound, :StockpileSettings_TCoins]
+[DFHack::MemHack::Compound, :StockpileSettings_TFinishedGoods]
+[DFHack::MemHack::Compound, :StockpileSettings_TFood]
+[DFHack::MemHack::Compound, :StockpileSettings_TFurniture]
+[DFHack::MemHack::Compound, :StockpileSettings_TGems]
+[DFHack::MemHack::Compound, :StockpileSettings_TLeather]
+[DFHack::MemHack::Compound, :StockpileSettings_TOre]
+[DFHack::MemHack::Compound, :StockpileSettings_TRefuse]
+[DFHack::MemHack::Compound, :StockpileSettings_TSheet]
+[DFHack::MemHack::Compound, :StockpileSettings_TStone]
+[DFHack::MemHack::Compound, :StockpileSettings_TWeapons]
+[DFHack::MemHack::Compound, :StockpileSettings_TWood]
+...
+[DFHack::MemHack::Compound, :Ui_TStockpile]
+...
+[DFHack::MemHack::Compound, :World_TStockpile]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple1]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple2]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple3]
+...
+[DFHack::MemHack::Enum, :StockpileCategory]
+[DFHack::MemHack::Enum, :StockpileList]
+...
+[DFHack::ViewscreenLayer, :ViewscreenLayerStockpilest]
+
+[DFHack]# rb p df.constants.map {|cn| c = df.const_get cn ; [(c.is_a?(Class) ? c : c.class).ancestors[1], cn] }.sort_by {|a,b| [b,a].to_s }.each {|a,b| p [a,b] }.map {|| }.compact
+...
+[DFHack::Building, :BuildingStockpilest]
+...
+[DFHack::MemHack::Compound, :ItemStockpileRef]
+...
+[DFHack::MemHack::Compound, :PlantRaw_TStockpileGrowthFlags]
+...
+[DFHack::MemHack::Compound, :RouteStockpileLink]
+[DFHack::MemHack::Compound, :RouteStockpileLink_TMode]
+...
+[DFHack::MemHack::Enum, :StockpileCategory]
+[DFHack::MemHack::Compound, :StockpileGroupSet]
+[DFHack::MemHack::Compound, :StockpileLinks]
+[DFHack::MemHack::Enum, :StockpileList]
+[DFHack::MemHack::Compound, :StockpileSettings]
+[DFHack::MemHack::Compound, :StockpileSettings_TAmmo]
+[DFHack::MemHack::Compound, :StockpileSettings_TAnimals]
+[DFHack::MemHack::Compound, :StockpileSettings_TArmor]
+[DFHack::MemHack::Compound, :StockpileSettings_TBarsBlocks]
+[DFHack::MemHack::Compound, :StockpileSettings_TCloth]
+[DFHack::MemHack::Compound, :StockpileSettings_TCoins]
+[DFHack::MemHack::Compound, :StockpileSettings_TFinishedGoods]
+[DFHack::MemHack::Compound, :StockpileSettings_TFood]
+[DFHack::MemHack::Compound, :StockpileSettings_TFurniture]
+[DFHack::MemHack::Compound, :StockpileSettings_TGems]
+[DFHack::MemHack::Compound, :StockpileSettings_TLeather]
+[DFHack::MemHack::Compound, :StockpileSettings_TOre]
+[DFHack::MemHack::Compound, :StockpileSettings_TRefuse]
+[DFHack::MemHack::Compound, :StockpileSettings_TSheet]
+[DFHack::MemHack::Compound, :StockpileSettings_TStone]
+[DFHack::MemHack::Compound, :StockpileSettings_TWeapons]
+[DFHack::MemHack::Compound, :StockpileSettings_TWood]
+...
+[DFHack::MemHack::Compound, :Ui_TStockpile]
+...
+[DFHack::ViewscreenLayer, :ViewscreenLayerStockpilest]
+...
+[DFHack::MemHack::Compound, :World_TStockpile]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple1]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple2]
+[DFHack::MemHack::Compound, :World_TStockpile_TSimple3]
+
+[DFHack]# rb p df::ItemType::Caption
+{:BAR=>"bars", :SMALLGEM=>"cut gem", :BLOCKS=>"blocks", :ROUGH=>"rough gem", :BOULDER=>"boulder", :WOOD=>"logs", :DOOR=>"door", :FLOODGATE=>"floodgate", :BED=>"bed", :CHAIR=>"chair", :CHAIN=>"chain", :FLASK=>"flask", :GOBLET=>"goblet", :INSTRUMENT=>"instrument", :TOY=>"toy", :WINDOW=>"window", :CAGE=>"cage", :BARREL=>"barrel", :BUCKET=>"bucket", :ANIMALTRAP=>"animal trap", :TABLE=>"table", :COFFIN=>"coffin", :STATUE=>"statue", :CORPSE=>"corpse", :WEAPON=>"weapon", :ARMOR=>"armor", :SHOES=>"footwear", :SHIELD=>"shield", :HELM=>"headwear", :GLOVES=>"handwear", :BOX=>"box/bag", :BIN=>"bin", :ARMORSTAND=>"armor stand", :WEAPONRACK=>"weapon rack", :CABINET=>"cabinet", :FIGURINE=>"figurine", :AMULET=>"amulet", :SCEPTER=>"scepter", :AMMO=>"ammo", :CROWN=>"crown", :RING=>"ring", :EARRING=>"earring", :BRACELET=>"bracelet", :GEM=>"large gem", :ANVIL=>"anvil", :CORPSEPIECE=>"body part", :REMAINS=>"remains", :MEAT=>"meat", :FISH=>"fish", :FISH_RAW=>"raw fish", :VERMIN=>"vermin", :PET=>"tame vermin", :SEEDS=>"seeds", :PLANT=>"plant", :SKIN_TANNED=>"leather", :PLANT_GROWTH=>"plant growth", :THREAD=>"thread", :CLOTH=>"cloth", :TOTEM=>"totem", :PANTS=>"legwear", :BACKPACK=>"backpack", :QUIVER=>"quiver", :CATAPULTPARTS=>"catapult part", :BALLISTAPARTS=>"ballista part", :SIEGEAMMO=>"siege ammo", :BALLISTAARROWHEAD=>"ballista arrow head", :TRAPPARTS=>"mechanism", :TRAPCOMP=>"trap component", :DRINK=>"drink", :POWDER_MISC=>"powder", :CHEESE=>"cheese", :FOOD=>"prepared meal", :LIQUID_MISC=>"liquid", :COIN=>"coin", :GLOB=>"glob", :ROCK=>"small rock", :PIPE_SECTION=>"pipe section", :HATCH_COVER=>"hatch cover", :GRATE=>"grate", :QUERN=>"quern", :MILLSTONE=>"millstone", :SPLINT=>"splint", :CRUTCH=>"crutch", :TRACTION_BENCH=>"traction bench", :ORTHOPEDIC_CAST=>"orthopedic cast", :TOOL=>"tool", :SLAB=>"slab", :EGG=>"egg", :BOOK=>"book", :SHEET=>"sheet", :BRANCH=>"branch"}
+
+[DFHack]# rb p df::UiSidebarMode::ENUM
+{0=>:Default, 1=>:Squads, 2=>:DesignateMine, 3=>:DesignateRemoveRamps, 4=>:DesignateUpStair, 5=>:DesignateDownStair, 6=>:DesignateUpDownStair, 7=>:DesignateUpRamp, 8=>:DesignateChannel, 9=>:DesignateGatherPlants, 10=>:DesignateRemoveDesignation, 11=>:DesignateSmooth, 12=>:DesignateCarveTrack, 13=>:DesignateEngrave, 14=>:DesignateCarveFortification, 15=>:Stockpiles, 16=>:Build, 17=>:QueryBuilding, 18=>:Orders, 19=>:OrdersForbid, 20=>:OrdersRefuse, 21=>:OrdersWorkshop, 22=>:OrdersZone, 23=>:BuildingItems, 24=>:ViewUnits, 25=>:LookAround, 26=>:DesignateItemsClaim, 27=>:DesignateItemsForbid, 28=>:DesignateItemsMelt, 29=>:DesignateItemsUnmelt, 30=>:DesignateItemsDump, 31=>:DesignateItemsUndump, 32=>:DesignateItemsHide, 33=>:DesignateItemsUnhide, 34=>:DesignateChopTrees, 35=>:DesignateToggleEngravings, 36=>:DesignateToggleMarker, 37=>:Hotkeys, 38=>:DesignateTrafficHigh, 39=>:DesignateTrafficNormal, 40=>:DesignateTrafficLow, 41=>:DesignateTrafficRestricted, 42=>:Zones, 43=>:ZonesPenInfo, 44=>:ZonesPitInfo, 45=>:ZonesHospitalInfo, 46=>:ZonesGatherInfo, 47=>:DesignateRemoveConstruction, 48=>:DepotAccess, 49=>:NotesPoints, 50=>:NotesRoutes, 51=>:Burrows, 52=>:Hauling, 53=>:ArenaWeather, 54=>:ArenaTrees}
+
+[DFHack]# rb p show_enums('food')
+DFHack::InterfaceKey
+[893, :STOCKPILE_FOOD]
+...
+
+[DFHack]# rb show_enums('LEATHER')
+DFHack::InterfaceKey
+[906, :STOCKPILE_LEATHER]
+DFHack::StockpileCategory
+[12, :Leather]
+DFHack::StockpileList
+
+food_lookup: food_idx(388)  type(38) index(526) token(CREATURE:RAT:LEATHER)
+ organic_material 388 is CREATURE:RAT:LEATHER
+
+liquid.dfstock (just the misc-liquids from food)
+00000000: 1222 9201 034c 5945 9201 1649 4e4f 5247  ."...LYE...INORG
+00000010: 414e 4943 3a4d 494c 4b5f 4f46 5f4c 494d  ANIC:MILK_OF_LIM
+00000020: 4598 0100 20d0 81cb a302 9001 0198 0101  E... ...........
+00000030: a001 00a8 0100 b001 01b8 0100 c001 00    ...............
+
+[15] pry(main)> io = File.open('df/stocksettings/liquid.dfstock', 'r')
+[16] pry(main)> Protobuf::Decoder.decode_each_field(io) {|*x| p x }
+
+[2, "\x92\x01\x03LYE\x92\x01\x16INORGANIC:MILK_OF_LIME\x98\x01\x00"]
+[4, 611500240]
+[18, 1]
+[19, 1]
+[20, 0]
+[21, 0]
+[22, 1]
+[23, 0]
+[24, 0]
+
+stockpiles.proto
+message StockpileSettings {
+...
+  message Foodset {
+  ...
+  }
+  optional AnimalsSet animals = 1;
+  optional FoodSet food = 2;
+  optional FurnitureSet furniture = 3;
+  optional int32 unknown1 = 4;
+  optional RefuseSet refuse = 5;
+  optional StoneSet stone = 6;
+  optional OreSet ore = 7;
+  optional AmmoSet ammo = 8;
+  optional CoinSet coin = 9;
+  optional BarsBlocksSet barsblocks = 10;
+  optional GemsSet gems = 11;
+  optional FinishedGoodsSet finished_goods = 12;
+  optional LeatherSet leather = 13;
+  optional ClothSet cloth = 14;
+  optional WoodSet wood = 15;
+  optional WeaponsSet weapons = 16;
+  optional ArmorSet  armor = 17;
+  optional bool allow_organic = 18;
+  optional bool allow_inorganic = 19;
+  optional bool corpses = 24;
+  // extras
+  optional int32 max_barrels = 20;
+  optional int32 max_bins = 21;
+  optional int32 max_wheelbarrows = 22;
+  optional bool use_links_only = 23;
+}
+
+[DFHack]# rb p df::ArtFacetType::NUME
+{:OWN_RACE=>0, :FANCIFUL=>1, :GOOD=>2, :EVIL=>3}
+[DFHack]# rb p df::ArtFacetType::ENUM
+{0=>:OWN_RACE, 1=>:FANCIFUL, 2=>:GOOD, 3=>:EVIL}
+
+[DFHack]# rb puts df::PlantRaw.own_instance_methods
+...
+stockpile_growth_flags/=
+stockpile_growths/=
+
+[DFHack]# rb p df.world.raws.plants.all[24]
+#<PlantRaw id="FOXTAIL_MILLET" index=24 anon_1=[347522464, 1, 347524736, 1, 347526400, 1, 347526384, 1, 347516112, 1, 347526784, 1, 347526624, 1, 347526608, 1, 347524720, 1, 347514896, 1, 347516080, 1, 347516096, 1, 347526576, 1, 347526592, 1, 347526768, 1, 347524992, 1, 347525008, 1, 347527616, 1, 347527392, 1, 347527600, 1, 347528384, 1, 347528624, 1, 347528400, 1, 347525376, 1, 347528608, 1, 347525392, 1, 347528304, 1, 347528368, 1, 347528528, 1, 347528496, 1, 347528512, 1, 347529264, 1, 347529328, 1, 347528272, 1, 347528288, 1, 347528048, 1, 347529440, 1, 347529456, 1, 347530128, 1, 347529472, 1, 347514848, 1, 347514864, 1, 347514880, 1, 347530096, 1, 347530112, 1, 347530448, 1, 347530080, 1, 347530464, 1, 347531168, 1] flags=#<DfFlagarray SPRING SUMMER AUTUMN WINTER SEED DRINK MILL DRY BIOME_SWAMP_TEMPERATE_FRESHWATER BIOME_SWAMP_TEMPERATE_SALTWATER BIOME_MARSH_TEMPERATE_FRESHWATER BIOME_MARSH_TEMPERATE_SALTWATER BIOME_FOREST_TEMPERATE_CONIFER BIOME_FOREST_TEMPERATE_BROADLEAF BIOME_GRASSLAND_TEMPERATE BIOME_SAVANNA_TEMPERATE BIOME_SHRUBLAND_TEMPERATE TWIGS_SIDE_BRANCHES TWIGS_ABOVE_BRANCHES> name="foxtail millet plant" name_plural="foxtail millet plants" adj="foxtail millet plant" seed_singular="foxtail millet" seed_plural="foxtail millet" leaves_singul ...
+
+# stockpiles debug mode
+food_lookup: food_idx(202)  type(419) index(202) token(PLANT:WILLOW:STRUCTURAL)
+ organic_material 202 is PLANT:WILLOW:STRUCTURAL
+[DFHack]# rb p df::MaterialInfo.new(419, 202)
+#<DFHack::MaterialInfo:0x000000010a8fc0b8 @mat_index=202,
+@mat_type=419,
+@mode=:Plant,
+@material=#<Material id="STRUCTURAL"
+  heat=#<MaterialCommon_THeat
+    spec_heat=3000
+    heatdam_point=10250
+    colddam_point=9900 ...>
+  solid_density=1200
+  liquid_density=-71534568
+  state_name=[
+    Solid="plant",
+    Liquid="none",
+  Gas="none",
+  Powder="plant", ...]
+  strength=#<MaterialCommon_TStrength
+    absorption=100
+    yield=[BENDING=10000, ...]
+  max_edge=1000>
+  material_value=1
+  flags=#<DfFlagarray
+    ROTS
+    STRUCTURAL_PLANT_MAT
+    73>
+  extract_storage=:BARREL
+  butcher_special_type=:NONE
+  reaction product=#<MaterialCommon_TReactionProduct id=[] item_type=[] ...>
+  prefix="willow"
+  food_mat_index=[
+    Meat=-1,
+    Fish=-1,
+    UnpreparedFish=-1,
+    Eggs=-1,
+    Plants=202, ...]
+  Gas="",
+  Powder="",
+  Paste="",
+  Pressed=""]>,
+@plant=#<PlantRaw
+  id="WILLOW"
+  index=202
+  flags=#<DfFlagarray
+    WET
+    BIOME_SWAMP_TEMPERATE_FRESHWATER
+    ...
+    TWIGS_SIDE_BRANCHES
+    SAPLING TREE
+    TWIGS_ABOVE_BRANCHES>
+  name="willow"
+...
+
+## Found the raws!
+
+[DFHack]# rb def M(t,n) ; df::MaterialInfo.new(t,n) end
+[DFHack]# rb p M(19,174).creature.raws
+["[DESCRIPTION:A large hooved, maned herbivore.  They can run swiftly and many are domesticated as steeds.] ...
+
+[DFHack]# rb puts M(419,1).plant.id
+TWO-GRAIN_WHEAT
+[DFHack]# rb puts M(423,1).plant.material_defs.inspect
+#<PlantRaw_TMaterialDefs
+type_basic_mat=419
+type_drink=420
+type_seed=423
+type_mill=421
+idx_basic_mat=1
+idx_drink=1
+idx_seed=1
+idx_mill=1
+
+[DFHack]# rb puts M(419,186).plant.id
+REED_ROPE
+[DFHack]# rb puts M(421,186)
+PLANT_MAT:REED_ROPE:THREAD
+[DFHack]# rb puts M(419,186).plant.material_defs.inspect.split(/\s+/)
+#<PlantRaw_TMaterialDefs
+type_basic_mat=419
+type_drink=420
+type_seed=422
+type_thread=421
+idx_basic_mat=186
+idx_drink=186
+idx_seed=186
+idx_thread=186
+
+[DFHack]# rb puts M(419,175).plant.id
+POD_SWEET
+[DFHack]# rb puts M(419,175).plant.material_defs.inspect.split(/\s+/)
+#<PlantRaw_TMaterialDefs
+type_basic_mat=419
+type_drink=420
+type_seed=423
+type_mill=421
+type_extract_barrel=422
+idx_basic_mat=175
+idx_drink=175
+idx_seed=175
+idx_mill=175
+idx_extract_barrel=175
+
+[DFHack]# rb puts M(419,202).plant.id
+WILLOW
+[DFHack]# rb puts M(419,202).plant.material_defs.inspect.split(/\s+/)
+#<PlantRaw_TMaterialDefs
+type_basic_mat=419
+type_tree=420
+idx_basic_mat=202
+idx_tree=202
+
+## M(x,y).to_s -> TOKEN
+[DFHack]# rb puts M(421,186)
+PLANT_MAT:REED_ROPE:THREAD
+
+rb H = {} ; 0.upto(619) {|type| last = nil ; index = 0 ; loop do ; mat = M(type, index) ; tag = mat.to_s ; H[tag] = [type, index] ; break if last == tag ; last = tag ; index += 1 ; end }
+rb File.write('mi.txt', H.inspect)
+
+[DFHack]# rb p df.world.raws.mat_table.own_methods
+[:builtin, :builtin=, :organic_indexes, :organic_indexes=, :organic_types, :organic_types=, :organic_unknown, :organic_unknown=]
+[DFHack]# rb p df.world.raws.mat_table.builtin.length
+659
+
+[DFHack]# rb B = df.world.selected_building -> <...>
+
+[DFHack]# rb p DFHack::ItemBarrelst.ancestors
+[DFHack::ItemBarrelst, DFHack::ItemConstructed, DFHack::ItemCrafted, DFHack::ItemActual, DFHack::Item, DFHack::MemHack::Compound ...
+
+
+[DFHack]# rb p DFHack::ItemdefArmorst.own_methods
+[:adjective, :adjective=, :armorlevel, :armorlevel=, :flags, :flags=, :lbstep, :lbstep=, :material_placeholder, :material_placeholder=, :material_size, :material_size=, :name, :name=, :name_plural, :name_plural=, :name_preplural, :name_preplural=, :props, :props=, :ubstep, :ubstep=, :value, :value=]
+[DFHack]# rb p DFHack::Itemdef.own_methods
+[:base_flags, :base_flags=, :categorize, :finalize, :id, :id=, :parseRaws, :raw_strings, :raw_strings=, :source_enid, :source_enid=, :source_enid_tg, :source_hfid, :source_hfid=, :source_hfid_tg, :subtype, :subtype=]
+
+[DFHack]# rb p DFHack::Itemdef.descendants
+[DFHack::ItemdefArmorst, DFHack::ItemdefHelmst, DFHack::ItemdefShieldst, DFHack::ItemdefPantsst, DFHack::ItemdefToolst, DFHack::ItemdefSiegeammost, DFHack::ItemdefAmmost, DFHack::ItemdefWeaponst, DFHack::ItemdefInstrumentst, DFHack::ItemdefShoesst, DFHack::ItemdefGlovesst, DFHack::ItemdefFoodst, DFHack::ItemdefTrapcompst, DFHack::ItemdefToyst]
+
+[DFHack]# rb p DFHack::MemHack::Enumerable.descendants
+[DFHack::MemHack::StaticArray, DFHack::MemHack::DfLinkedList, DFHack::MemHack::DfArray, DFHack::MemHack::DfStaticFlagarray, DFHack::MemHack::DfFlagarray, DFHack::MemHack::StlBitVector, DFHack::MemHack::StlVector8, DFHack::MemHack::StlVector16, DFHack::MemHack::StlVector64, DFHack::MemHack::StlVector32]
+
+Progress on stockpiles
+D(M(34,34))
+DFHack::MaterialInfo, Material Type: 34, Material Index: 34 Token: CREATURE_MAT:BIRD_CROW:PANCREAS
+  ...
+  Food_Mat_Indexes: Meat: 419
+  Flags: GENERATES_MIASMA, ROTS, IMPLIES_ANIMAL_KILL, EDIBLE_COOKED, EDIBLE_VERMIN, MEAT
+s.food.meat[419] -> 'CREATURE:BIRD_CROW:PANCREAS'
+
+def all_stockpile_items
+  all_organics +
+  ???
+end
+
+T = df.map_tile_at(df.cursor)
+B = T.map_block
+# Contains 256 Tiles, TL->BL, ..., TR->BR
+
+[DFHack]# rb df.world.raws.itemdefs.ammo.each {|x| puts '' ; D(x) }
+bolts, arrows, ...
+
+[DFHack]# rb p df.world.stockpile
+#<World_TStockpile num_jobs=[Any=48, Stone=0, Wood=0, Item=0, Bin=30, Body=0, Food=11, Refuse=5, Furniture=2, Animal=0] num_haulers=[Any=18, Stone=13, Wood=13, Item=13, Bin=13, Body=13, Food=13, Refuse=13, Furniture=13, Animal=13] simple1=#<World_TStockpile_TSimple1 anon_1=0 food=0 anon_2=0 anon_3=0> seeds=[0, 0, 0, 0, 0, 0, ... 0, 0] plants=[0, 0, 0, 0, 0 ...
+
+[DFHack]# rb p Bac()
+#<BuildingStockpilest x1=51 y1=74 centerx=61 x2=71 y2=100 centery=87 z=162 flags=#<BuildingFlags
+
+
+T = df.map_tile_at(df.cursor)
+T.dig(:Ramp)
+T.vein
+T.mapblock
+[DFHack]# rb p T.tiletype = :SoilWall
+:SoilWall
+
+# At some point my saves became corrupt and failed to load - beware
+
+[DFHack]# rb p DFHack::BuildingStockpilest.own_methods
+[:+, :-, :container_item_id, :container_item_id=, :container_item_tg, :container_type, :container_type=, :container_x, :container_x=, :container_y, :container_y=, :linked_stops, :linked_stops=, :links, :links=, :max_barrels, :max_barrels=, :max_bins, :max_bins=, :max_wheelbarrows, :max_wheelbarrows=, :settings, :settings=, :stockpile_number, :stockpile_number=, :use_links_only, :use_links_only=]
+
+[DFHack]# rb p B.settings.class
+DFHack::StockpileSettings
+[DFHack]# rb p B.settings.own_methods
+[:allow_inorganic, :allow_inorganic=, :allow_organic, :allow_organic=, :ammo, :ammo=, :animals, :animals=, :armor, :armor=, :bars_blocks, :bars_blocks=, :cloth, :cloth=, :coins, :coins=, :finished_goods, :finished_goods=, :flags, :flags=, :food, :food=, :furniture, :furniture=, :gems, :gems=, :leather, :leather=, :ore, :ore=, :refuse, :refuse=, :sheet, :sheet=, :stone, :stone=, :unk1, :unk1=, :weapons, :weapons=, :wood, :wood=]
+
+ck]# rb p B.settings.animals.class.ancestors
+[DFHack::StockpileSettings_TAnimals, DFHack::MemHack::Compound, DFHack::MemHack::MemStruct, Object, DFDebugMethods, Kernel, BasicObject]
+[DFHack]# rb p B.settings.animals.own_methods
+[:empty_cages, :empty_cages=, :empty_traps, :empty_traps=, :enabled, :enabled=]
+[DFHack]# rb p B.settings.animals.enabled.class.ancestors
+[DFHack::MemHack::StlVector8, DFHack::MemHack::StlVector32, DFHack::MemHack::Enumerable, Enumerable, DFHack::MemHack::MemStruct, Object, DFDebugMethods, Kernel, BasicObject]
+
+B.settings.armor.class.ancestors -> DFHack::StockpileSettings_TArmor
+
+[DFHack]# rb p B.settings.armor.own_methods
+[:body, :body=, :feet, :feet=, :hands, :hands=, :head, :head=, :legs, :legs=, :mats, :mats=, :other_mats, :other_mats=, :quality_core, :quality_core=, :quality_total, :quality_total=, :shield, :shield=, :unusable, :unusable=, :usable, :usable=]
+
+B.settings.armor.body.class.ancestors -> [DFHack::MemHack::StlVector8,
+B.settings.armor.quality_core.class.ancestors -> [DFHack::MemHack::StaticArray
+
+
+k,v iterators where each sub-list knowns its name and builds a path.
+
+Wood for instance is prefix 'PLANT_MAT', suffix 'WOOD', where the middle is the wood-mat index...?
+
+DFHack::BuildingStockpilest
+  Flags:
+  max_barrels
+  max_bins
+  max_wheelbarrows
+  use_links_only
+
+  Category:
+  settings
+    Flags:
+    allow_inorganic
+    allow_organic
+
+    Category:
+    ammo
+      mats
+      other_mats
+      quality_core
+      quality_total
+      type
+    animals
+      Flags:
+      empty_cages
+      empty_traps
+
+      Category:
+      enabled
+    armor
+      Flags:
+      unusable
+      usable
+
+      Category:
+      body
+      feet
+      hands
+      head
+      legs
+      mats
+      other_mats
+      quality_core
+      quality_total
+      shield
+    bars_blocks
+      bars_mats
+      bars_other_mats
+      blocks_mats
+      blocks_other_mats
+    cloth
+      cloth_metal
+      cloth_plant
+      cloth_silk
+      cloth_yarn
+      thread_metal
+      thread_plant
+      thread_silk
+      thread_yarn
+    coins
+      mats
+    finished_goods
+      mats
+      other_mats
+      quality_core
+      quality_total
+      type
+    food
+      Flags:
+      prepared_meals
+
+      Category:
+      cheese_animal
+      cheese_plant
+      drink_animal
+      drink_plant
+      egg
+      fish
+      glob
+      glob_paste
+      glob_pressed
+      leaves
+      liquid_animal
+      liquid_misc
+      liquid_plant
+      meat
+      plants
+      powder_creature
+      powder_plant
+      seeds
+      unprepared_fish
+    furniture
+      Flags:
+      sand_bags # Doesn't appear to work - sand_bags are actually the last element of the type list
+
+      Category:
+      mats
+      other_mats
+      quality_core
+      quality_total
+      type
+    gems
+      cut_mats
+      cut_other_mats
+      rough_mats
+      rough_other_mats
+    leather
+      mats
+    ore # Not 'Corpses'
+      mats
+    refuse
+      body_parts
+      bones
+      corpses
+      fresh_raw_hide
+      hair
+      horns
+      rotten_raw_hide
+      shells
+      skulls
+      teeth
+      type
+    sheet
+      paper
+      parchment
+    stone
+      mats
+    weapons
+      Flags:
+      unusable
+      usable
+
+      Category:
+      mats
+      other_mats
+      quality_core
+      quality_total
+      trapcomp_type
+      weapon_type
+    wood
+      mats
+
+
+Flags:
+animals
+food
+furniture
+corpses
+refuse
+stone
+ammo
+coins
+bars_blocks
+gems
+finished_goods
+leather
+cloth
+wood
+weapons
+armor
+sheet
+
+# This could be helpful - df.world.stockpile
+field(:stockpile, 118760) {
+    compound(:World_TStockpile) {
+        field(:num_jobs, 0) {
+            static_array(10, 4, HaulerType) {
+                number 32, true
+            }
+        }
+        field(:num_haulers, 40) {
+            static_array(10, 4, HaulerType) {
+                number 32, true
+            }
+        }
+
+class StockpileCategory < MemHack::Enum
+    ENUM = Hash.new
+    NUME = Hash.new
+    ENUM[-1] = :Remove ; NUME[:Remove] = -1
+    ENUM[0] = :Animals ; NUME[:Animals] = 0
+    ENUM[1] = :Food ; NUME[:Food] = 1
+    ENUM[2] = :Furniture ; NUME[:Furniture] = 2
+    ENUM[3] = :Corpses ; NUME[:Corpses] = 3
+    ENUM[4] = :Refuse ; NUME[:Refuse] = 4
+    ENUM[5] = :Stone ; NUME[:Stone] = 5
+    ENUM[6] = :Ore ; NUME[:Ore] = 6
+    ...
+
+class StockpileList < MemHack::Enum
+    ENUM = Hash.new ; NUME = Hash.new ; IsCategory = Hash.new
+
+    ENUM[0] = :Animals ; NUME[:Animals] = 0 ; IsCategory[:Animals] = true
+    ENUM[1] = :Food ; NUME[:Food] = 1 ; IsCategory[:Food] = true
+    ENUM[2] = :FoodMeat ; NUME[:FoodMeat] = 2
+    ENUM[3] = :FoodFish ; NUME[:FoodFish] = 3
+    ENUM[4] = :FoodUnpreparedFish ; NUME[:FoodUnpreparedFish] = 4
+    ENUM[5] = :FoodEgg ; NUME[:FoodEgg] = 5
+    ENUM[6] = :FoodPlants ; NUME[:FoodPlants] = 6
+    ENUM[7] = :FoodDrinkPlant ; NUME[:FoodDrinkPlant] = 7
+    ENUM[8] = :FoodDrinkAnimal ; NUME[:FoodDrinkAnimal] = 8
+    ENUM[9] = :FoodCheesePlant ; NUME[:FoodCheesePlant] = 9
+    ENUM[10] = :FoodCheeseAnimal ; NUME[:FoodCheeseAnimal] = 10
+    ENUM[11] = :FoodSeeds ; NUME[:FoodSeeds] = 11
+    ENUM[12] = :FoodLeaves ; NUME[:FoodLeaves] = 12
+    ENUM[13] = :FoodMilledPlant ; NUME[:FoodMilledPlant] = 13
+    ENUM[14] = :FoodBoneMeal ; NUME[:FoodBoneMeal] = 14
+    ENUM[15] = :FoodFat ; NUME[:FoodFat] = 15
+    ENUM[16] = :FoodPaste ; NUME[:FoodPaste] = 16
+    ENUM[17] = :FoodPressedMaterial ; NUME[:FoodPressedMaterial] = 17
+    ENUM[18] = :FoodExtractPlant ; NUME[:FoodExtractPlant] = 18
+    ENUM[19] = :FoodExtractAnimal ; NUME[:FoodExtractAnimal] = 19
+    ENUM[20] = :FoodMiscLiquid ; NUME[:FoodMiscLiquid] = 20
+    ENUM[21] = :Furniture ; NUME[:Furniture] = 21 ; IsCategory[:Furniture] = true
+    ENUM[22] = :FurnitureType ; NUME[:FurnitureType] = 22
+    ...
+    # No prepared_meals, no usable/unusable
+
+class ItemQuality < MemHack::Enum
+    ENUM = Hash.new
+    NUME = Hash.new
+    ENUM[0] = :Ordinary ; NUME[:Ordinary] = 0
+    ...
+
+class MaterialFlags < MemHack::Enum
+    ENUM = Hash.new
+    NUME = Hash.new
+    Type = Hash.new(:None)
+    ENUM[0] = :BONE ; NUME[:BONE] = 0 ; Type[:BONE] = :Bone
+    ENUM[1] = :MEAT ; NUME[:MEAT] = 1
+    ENUM[2] = :EDIBLE_VERMIN ; NUME[:EDIBLE_VERMIN] = 2
+    ENUM[3] = :EDIBLE_RAW ; NUME[:EDIBLE_RAW] = 3
+    ENUM[4] = :EDIBLE_COOKED ; NUME[:EDIBLE_COOKED] = 4
+    ENUM[5] = :ALCOHOL ; NUME[:ALCOHOL] = 5
+    ENUM[6] = :ITEMS_METAL ; NUME[:ITEMS_METAL] = 6
+    ENUM[7] = :ITEMS_BARRED ; NUME[:ITEMS_BARRED] = 7
+    ENUM[8] = :ITEMS_SCALED ; NUME[:ITEMS_SCALED] = 8
+    ENUM[9] = :ITEMS_LEATHER ; NUME[:ITEMS_LEATHER] = 9
+    ENUM[10] = :ITEMS_SOFT ; NUME[:ITEMS_SOFT] = 10
+    ENUM[11] = :ITEMS_HARD ; NUME[:ITEMS_HARD] = 11
+    ENUM[12] = :IMPLIES_ANIMAL_KILL ; NUME[:IMPLIES_ANIMAL_KILL] = 12
+    ENUM[13] = :ALCOHOL_PLANT ; NUME[:ALCOHOL_PLANT] = 13
+    ENUM[14] = :ALCOHOL_CREATURE ; NUME[:ALCOHOL_CREATURE] = 14
+    ENUM[15] = :CHEESE_PLANT ; NUME[:CHEESE_PLANT] = 15
+    ENUM[16] = :CHEESE_CREATURE ; NUME[:CHEESE_CREATURE] = 16
+    ENUM[17] = :POWDER_MISC_PLANT ; NUME[:POWDER_MISC_PLANT] = 17
+    ENUM[18] = :POWDER_MISC_CREATURE ; NUME[:POWDER_MISC_CREATURE] = 18
+    ENUM[19] = :STOCKPILE_GLOB ; NUME[:STOCKPILE_GLOB] = 19
+    ENUM[20] = :LIQUID_MISC_PLANT ; NUME[:LIQUID_MISC_PLANT] = 20
+    ENUM[21] = :LIQUID_MISC_CREATURE ; NUME[:LIQUID_MISC_CREATURE] = 21
+    ENUM[22] = :LIQUID_MISC_OTHER ; NUME[:LIQUID_MISC_OTHER] = 22
+    ENUM[23] = :WOOD ; NUME[:WOOD] = 23 ; Type[:WOOD] = :Wood
+    ENUM[24] = :THREAD_PLANT ; NUME[:THREAD_PLANT] = 24 ; Type[:THREAD_PLANT] = :Cloth
+    ...
+
+class OrganicMatCategory < MemHack::Enum
+    ENUM = Hash.new
+    NUME = Hash.new
+    ENUM[0] = :Meat ; NUME[:Meat] = 0
+    ENUM[1] = :Fish ; NUME[:Fish] = 1
+    ENUM[2] = :UnpreparedFish ; NUME[:UnpreparedFish] = 2
+    ENUM[3] = :Eggs ; NUME[:Eggs] = 3
+    ENUM[4] = :Plants ; NUME[:Plants] = 4
+    ENUM[5] = :PlantDrink ; NUME[:PlantDrink] = 5
+    ENUM[6] = :CreatureDrink ; NUME[:CreatureDrink] = 6
+    ENUM[7] = :PlantCheese ; NUME[:PlantCheese] = 7
+    ENUM[8] = :CreatureCheese ; NUME[:CreatureCheese] = 8
+    ENUM[9] = :Seed ; NUME[:Seed] = 9
+    ENUM[10] = :Leaf ; NUME[:Leaf] = 10
+    ENUM[11] = :PlantPowder ; NUME[:PlantPowder] = 11
+    ENUM[12] = :CreaturePowder ; NUME[:CreaturePowder] = 12
+    ENUM[13] = :Glob ; NUME[:Glob] = 13
+    ENUM[14] = :PlantLiquid ; NUME[:PlantLiquid] = 14
+    ENUM[15] = :CreatureLiquid ; NUME[:CreatureLiquid] = 15
+    ENUM[16] = :MiscLiquid ; NUME[:MiscLiquid] = 16
+    ENUM[17] = :Leather ; NUME[:Leather] = 17
+    ENUM[18] = :Silk ; NUME[:Silk] = 18
+    ENUM[19] = :PlantFiber ; NUME[:PlantFiber] = 19
+
+class PlantRawFlags < MemHack::Enum
+    ENUM = Hash.new
+    NUME = Hash.new
+    ENUM[0] = :SPRING ; NUME[:SPRING] = 0
+    ENUM[1] = :SUMMER ; NUME[:SUMMER] = 1
+    ENUM[2] = :AUTUMN ; NUME[:AUTUMN] = 2
+    ENUM[3] = :WINTER ; NUME[:WINTER] = 3
+    ENUM[5] = :SEED ; NUME[:SEED] = 5
+    ENUM[6] = :TREE_HAS_MUSHROOM_CAP ; NUME[:TREE_HAS_MUSHROOM_CAP] = 6
+    ENUM[7] = :DRINK ; NUME[:DRINK] = 7
+    ENUM[8] = :EXTRACT_BARREL ; NUME[:EXTRACT_BARREL] = 8
+    ENUM[9] = :EXTRACT_VIAL ; NUME[:EXTRACT_VIAL] = 9
+    ENUM[10] = :EXTRACT_STILL_VIAL ; NUME[:EXTRACT_STILL_VIAL] = 10
+    ENUM[11] = :GENERATED ; NUME[:GENERATED] = 11
+    ENUM[12] = :THREAD ; NUME[:THREAD] = 12
+    ENUM[13] = :MILL ; NUME[:MILL] = 13
+    ENUM[20] = :WET ; NUME[:WET] = 20
+    ENUM[21] = :DRY ; NUME[:DRY] = 21
+
+[DFHack]# rb p M(419,174).decode_string('INORGANIC:NICKEL')
+#<Material id="" gem_name1="" gem_name2="" stone_name="" heat=#<MaterialCommon_THeat spec_heat=444 heatdam_point=60001 colddam_point=60001 ignite_point=60001 melting_point=12619 boiling_point=15243 mat_fixed_temp=60001> solid_density=8800 liquid_density=7810 molar_mass=58693 state_color=[Solid=96, Liquid=87, Gas=87, Powder=96, Paste=96, Pressed=96] state_name=[Solid="nickel", Liquid="molten nickel", Gas="boiling nickel", Powder="nickel", Paste="nickel", Pressed="nickel"]
+
+M(419,174).decode_string('CREATURE:BIRD_RAVEN:SPLEEN')
+35
+
+M(419,174).decode_string('PLANT:CATTAIL:STRUCTURAL')
+419
+
+        def decode_string(str)
+            parts = str.split(':')
+            case parts[0].chomp('_MAT')
+            when 'INORGANIC', 'STONE', 'METAL'
+                decode_string_inorganic(parts)
+            when 'PLANT'
+                decode_string_plant(parts)
+
+M(419,174).decode_string_plant(%w(PLANT CATTAIL STRUCTURAL))
+419
+
+
+DFHack::FurnitureType::ENUM.values
+[:FLOODGATE, :HATCH_COVER, :GRATE, :DOOR, :CATAPULTPARTS, :BALLISTAPARTS, :TRAPPARTS, :BED, :TRACTION_BENCH, :WINDOW, :CHAIR, :TABLE, :COFFIN, :STATUE, :SLAB, :QUERN, :MILLSTONE, :ARMORSTAND, :WEAPONRACK, :CABINET, :ANVIL, :BUCKET, :BIN, :BOX, :SIEGEAMMO, :BARREL, :BALLISTAARROWHEAD, :PIPE_SECTION, :FOOD_STORAGE, :MINECART, :WHEELBARROW, :OTHER_LARGE_TOOLS, :SAND_BAG]
+
+
+library/modules/Materials.cpp
+bool MaterialInfo::find(const std::vector<std::string> &items)
+{
+    if (items.empty())
+        return false;
+
+    if (items[0] == "INORGANIC" && items.size() > 1)
+        return findInorganic(vector_get(items,1));
+    if (items[0] == "CREATURE_MAT" || items[0] == "CREATURE")
+        return findCreature(vector_get(items,1), vector_get(items,2));
+    if (items[0] == "PLANT_MAT" || items[0] == "PLANT")
+        return findPlant(vector_get(items,1), vector_get(items,2));
+
+    if (items.size() == 1)
+    {
+        if (findBuiltin(items[0]))
+            return true;
+        if (findInorganic(items[0]))
+            return true;
+        if (findPlant(items[0], ""))
+            return true;
+
+
+int32_t Items::createItem(df::item_type/, int16_t item_subtype, int16_t mat_type, int32_t mat_index, df::unit* unit) {
+    //based on Quietust's plugins/createitem.cpp
+    CHECK_NULL_POINTER(unit);
+    df::map_block* block = Maps::getTileBlock(unit->pos.x, unit->pos.y, unit->pos.z);
+    CHECK_NULL_POINTER(block);
+    df::reaction_product_itemst* prod = df::allocate<df::reaction_product_itemst>();
+    prod->item_type = item_type;
+    prod->item_subtype = item_subtype;
+    prod->mat_type = mat_type;
+    prod->mat_index = mat_index;
+    prod->probability = 100;
+    prod->count = 1;
+    switch(item_type) {
+    case df::item_type::BAR:
+    case df::item_type::POWDER_MISC:
+    case df::item_type::LIQUID_MISC:
+    case df::item_type::DRINK:
+        prod->product_dimension = 150;
+        break;
+    case df::item_type::THREAD:
+        prod->product_dimension = 15000;
+        break;
+
+
+void Buildings::getStockpileContents(df::building_stockpilest *stockpile, std::vector<df::item*> *items)
+{
+    CHECK_NULL_POINTER(stockpile);
+
+    items->clear();
+
+
+[DFHack]# rb p df.world.buildings.other[:STOCKPILE].length
+65
+
+[DFHack]# rb p df.world.raws.creatures.list_caste
+[0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1,
+
+[DFHack]# rb p df.world.raws.creatures.list_creature
+[0, 0, 1, 1, 2, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9
+
+[DFHack::CasteRaw, :attributes]
+ => #<CasteRaw_TAttributes phys_att_range=[STRENGTH=[200, 700, 900, 1000, 1100, 1300, 2000], AGILITY=[200, 700, 900, 1000, 1100, 1300, 2000], TOUGHNESS=[200, 700, 900, 1000, 1100, 1300, 2000], ENDURANCE=[200, 700, 900, 1000, 1100, 1300, 2000] ...
+
+[DFHack]# rb D(M(0,10))
+DFHack::MaterialInfo, Material Type: 0, Material Index: 10 Token: INORGANIC:PLATINUM
+  Prefix:  Value: 40
+  state_name: [Solid="platinum", Liquid="molten platinum", Gas="boiling platinum", Powder="platinum", Paste="platinum", Pressed="platinum"]
+  Flags: IS_METAL, ITEMS_HARD, ITEMS_SCALED, ITEMS_BARRED, ITEMS_METAL
+
+[DFHack]# rb D(M(0,9))
+DFHack::MaterialInfo, Material Type: 0, Material Index: 9 Token: INORGANIC:PIG_IRON
+  Prefix:  Value: 10
+  state_name: [Solid="pig iron", Liquid="molten pig iron", Gas="boiling pig iron", Powder="pig iron", Paste="pig iron", Pressed="pig iron"]
+  Flags: IS_METAL
+
+[DFHack]# rb D(M(0,8))
+DFHack::MaterialInfo, Material Type: 0, Material Index: 8 Token: INORGANIC:STEEL
+  Prefix:  Value: 30
+  state_name: [Solid="steel", Liquid="molten steel", Gas="boiling steel", Powder="steel", Paste="steel", Pressed="steel"]
+  Flags: ITEMS_METAL, ITEMS_DIGGER, ITEMS_AMMO, ITEMS_ANVIL, ITEMS_WEAPON_RANGED, ITEMS_WEAPON, IS_METAL, ITEMS_HARD, ITEMS_SCALED, ITEMS_BARRED, ITEMS_ARMOR
+  Reaction Products: []
+
+[DFHack]# rb D(M(0,17))
+DFHack::MaterialInfo, Material Type: 0, Material Index: 17 Token: INORGANIC:ALUMINUM
+  Prefix:  Value: 40
+  state_name: [Solid="aluminum", Liquid="molten aluminum", Gas="boiling aluminum", Powder="aluminum", Paste="aluminum", Pressed="aluminum"]
+  Flags: IS_METAL, ITEMS_HARD, ITEMS_SCALED, ITEMS_BARRED, ITEMS_METAL
+  Reaction Products: []
+
+[DFHack]# rb D(M(0,226))
+DFHack::MaterialInfo, Material Type: 0, Material Index: 226 Token: INORGANIC:NATIVE_ALUMINUM
+  Prefix:  Value: 40
+  state_name: [Solid="native aluminum", Liquid="molten native aluminum", Gas="boiling native aluminum", Powder="native aluminum", Paste="native aluminum", Pressed="native aluminum"]
+  Flags: IS_STONE, ITEMS_HARD
+  Reaction Products: []
+
+
+[DFHack]# rb p DFHack::Global.own_methods
+[:activity_next_id, :activity_next_id=, :agreement_next_id, :agreement_next_id=, :army_controller_next_id, :army_controller_next_id=, :army_next_id, :army_next_id=, :army_tracking_info_next_id, :army_tracking_info_next_id=, :art_image_chunk_next_id, :art_image_chunk_next_id=, :artifact_next_id, :artifact_next_id=, :basic_seed, :basic_seed=, :belief_system_next_id, :belief_system_next_id=, :building_next_id, :building_next_id=, :created_item_count, :created_item_count=, :created_item_matindex, :created_item_matindex=, :created_item_mattype, :created_item_mattype=, :created_item_subtype, :created_item_subtype=, :created_item_type, :created_item_type=, :crime_next_id, :crime_next_id=, :cultural_identity_next_id, :cultural_identity_next_id=, :cur_season, :cur_season=, :cur_season_tick, :cur_season_tick=, :cur_year, :cur_year=, :cur_year_tick, :cur_year_tick=, :cur_year_tick_advmode, :cur_year_tick_advmode=, :current_weather, :current_weather=, :cursor, :cursor=, :d_init, :d_init=, :dance_form_next_id, :dance_form_next_id=, :debug_combat, :debug_combat=, :debug_fastmining, :debug_fastmining=, :debug_noberserk, :debug_noberserk=, :debug_nodrink, :debug_nodrink=, :debug_noeat, :debug_noeat=, :debug_nomoods, :debug_nomoods=, :debug_nopause, :debug_nopause=, :debug_nosleep, :debug_nosleep=, :debug_showambush, :debug_showambush=, :debug_turbospeed, :debug_turbospeed=, :debug_wildlife, :debug_wildlife=, :enabler, :enabler=, :entity_next_id, :entity_next_id=, :flow_guide_next_id, :flow_guide_next_id=, :flows, :flows=, :formation_next_id, :formation_next_id=, :gamemode, :gamemode=, :gametype, :gametype=, :gps, :gps=, :gview, :gview=, :hist_event_collection_next_id, :hist_event_collection_next_id=, :hist_event_next_id, :hist_event_next_id=, :hist_figure_next_id, :hist_figure_next_id=, :identity_next_id, :identity_next_id=, :incident_next_id, :incident_next_id=, :init, :init=, :interaction_instance_next_id, :interaction_instance_next_id=, :item_next_id, :item_next_id=, :job_next_id, :job_next_id=, :machine_next_id, :machine_next_id=, :map_renderer, :map_renderer=, :min_load_version, :min_load_version=, :movie_version, :movie_version=, :musical_form_next_id, :musical_form_next_id=, :nemesis_next_id, :nemesis_next_id=, :occupation_next_id, :occupation_next_id=, :pause_state, :pause_state=, :poetic_form_next_id, :poetic_form_next_id=, :process_dig, :process_dig=, :process_jobs, :process_jobs=, :proj_next_id, :proj_next_id=, :rhythm_next_id, :rhythm_next_id=, :save_on_exit, :save_on_exit=, :scale_next_id, :scale_next_id=, :schedule_next_id, :schedule_next_id=, :selection_rect, :selection_rect=, :soul_next_id, :soul_next_id=, :squad_next_id, :squad_next_id=, :standing_orders_auto_butcher, :standing_orders_auto_butcher=, :standing_orders_auto_collect_webs, :standing_orders_auto_collect_webs=, :standing_orders_auto_fishery, :standing_orders_auto_fishery=, :standing_orders_auto_kiln, :standing_orders_auto_kiln=, :standing_orders_auto_kitchen, :standing_orders_auto_kitchen=, :standing_orders_auto_loom, :standing_orders_auto_loom=, :standing_orders_auto_other, :standing_orders_auto_other=, :standing_orders_auto_slaughter, :standing_orders_auto_slaughter=, :standing_orders_auto_smelter, :standing_orders_auto_smelter=, :standing_orders_auto_tan, :standing_orders_auto_tan=, :standing_orders_dump_bones, :standing_orders_dump_bones=, :standing_orders_dump_corpses, :standing_orders_dump_corpses=, :standing_orders_dump_hair, :standing_orders_dump_hair=, :standing_orders_dump_other, :standing_orders_dump_other=, :standing_orders_dump_shells, :standing_orders_dump_shells=, :standing_orders_dump_skins, :standing_orders_dump_skins=, :standing_orders_dump_skulls, :standing_orders_dump_skulls=, :standing_orders_farmer_harvest, :standing_orders_farmer_harvest=, :standing_orders_forbid_other_dead_items, :standing_orders_forbid_other_dead_items=, :standing_orders_forbid_other_nohunt, :standing_orders_forbid_other_nohunt=, :standing_orders_forbid_own_dead, :standing_orders_forbid_own_dead=, :standing_orders_forbid_own_dead_items, :standing_orders_forbid_own_dead_items=, :standing_orders_forbid_used_ammo, :standing_orders_forbid_used_ammo=, :standing_orders_gather_animals, :standing_orders_gather_animals=, :standing_orders_gather_bodies, :standing_orders_gather_bodies=, :standing_orders_gather_food, :standing_orders_gather_food=, :standing_orders_gather_furniture, :standing_orders_gather_furniture=, :standing_orders_gather_minerals, :standing_orders_gather_minerals=, :standing_orders_gather_refuse, :standing_orders_gather_refuse=, :standing_orders_gather_refuse_outside, :standing_orders_gather_refuse_outside=, :standing_orders_gather_vermin_remains, :standing_orders_gather_vermin_remains=, :standing_orders_gather_wood, :standing_orders_gather_wood=, :standing_orders_job_cancel_announce, :standing_orders_job_cancel_announce=, :standing_orders_mix_food, :standing_orders_mix_food=, :standing_orders_use_dyed_cloth, :standing_orders_use_dyed_cloth=, :standing_orders_zoneonly_drink, :standing_orders_zoneonly_drink=, :standing_orders_zoneonly_fish, :standing_orders_zoneonly_fish=, :task_next_id, :task_next_id=, :texture, :texture=, :timed_events, :timed_events=, :title, :title=, :title_spaced, :title_spaced=, :ui, :ui=, :ui_advmode, :ui_advmode=, :ui_build_selector, :ui_build_selector=, :ui_building_assign_is_marked, :ui_building_assign_is_marked=, :ui_building_assign_items, :ui_building_assign_items=, :ui_building_assign_type, :ui_building_assign_type=, :ui_building_assign_units, :ui_building_assign_units=, :ui_building_in_assign, :ui_building_in_assign=, :ui_building_in_resize, :ui_building_in_resize=, :ui_building_item_cursor, :ui_building_item_cursor=, :ui_building_resize_radius, :ui_building_resize_radius=, :ui_lever_target_type, :ui_lever_target_type=, :ui_look_cursor, :ui_look_cursor=, :ui_look_list, :ui_look_list=, :ui_menu_width, :ui_menu_width=, :ui_selected_unit, :ui_selected_unit=, :ui_sidebar_menus, :ui_sidebar_menus=, :ui_unit_view_mode, :ui_unit_view_mode=, :ui_workshop_in_add, :ui_workshop_in_add=, :ui_workshop_job_cursor, :ui_workshop_job_cursor=, :unit_chunk_next_id, :unit_chunk_next_id=, :unit_next_id, :unit_next_id=, :vehicle_next_id, :vehicle_next_id=, :version, :version=, :window_x, :window_x=, :window_y, :window_y=, :window_z, :window_z=, :world, :world=, :written_content_next_id, :written_content_next_id=]
+
+Animals: (910)
+Toads
+Toad Men
+Giant Toads
+Worms
+...
+Lynx/ Men
+Giant Lynx
+...
+Protected Dooms
+
+Meats: (10144)
+Meat
+Prepared Eye
+Toad/ Eye
+
+Fish: (75)
+Cuttlefish F
+Cuttlefish M
+
+Metals: (307)
+Iron
+Gold
+Silver
+Copper
+Nickel
+Zinc
+Bronze
+Brass
+Steel
+...
+Frosty Metal
+Pock-marked Metal
+Flashing Metal
+
+
+# In Pile, enable Food, Block all, permit Plants
+rb A1 = Bac().food.original_plants.to_a
+
+# Compare that list to the list generated by showing if the item is in it and what its food_indexes and flags are.
+# To figure out why only some of the plants are listed.
+rb Bac().food.plants.each_with_index {|pl,i| p [i, A1[i], pl.token, pl.plant.material.map {|m| m.food_mat_index.to_hash.select {|k,v| v != -1 } }.inject(&:merge), inspect_array(pl.flags).split(', ').reject {|f| f =~ /^BIOM/ }.map(&:to_sym)] }
+
+rb Bac().food.plants.each_with_index {|pl,i| p [i, A1[i], pl.token, pl.plant.material.map {|m| m.food_mat_index.to_hash.select {|k,v| v != -1 } }.inject(&:merge), inspect_array(pl.flags).split(', ').reject {|f| f =~ /^BIOM/ }.map(&:to_sym)] }
+
+[DFHack]# rb df.world.buildings.other.each_with_index.map {|x,i| [i, ('%03d' % x.length), x.first.class] if x.first }.compact.each {|a| p a }
+[0, "406", DFHack::BuildingFarmplotst]
+[1, "001", DFHack::BuildingCivzonest]
+[2, "054", DFHack::BuildingStockpilest]
+[3, "010", DFHack::BuildingCivzonest]
+[4, "010", DFHack::BuildingCivzonest]
+[5, "342", DFHack::BuildingFarmplotst]
+[6, "005", DFHack::BuildingScrewPumpst]
+[7, "018", DFHack::BuildingBoxst]
+[8, "037", DFHack::BuildingBookcasest]
+[9, "036", DFHack::BuildingBedst]
+[10, "052", DFHack::BuildingCoffinst]
+...
+
+
+[DFHack]# rb DFStockalyzer.analyze.map {|k,a| Hash[[(B(k).type rescue B(k).getType), k], a.sort.map {|id| [(B(id).type rescue B(id).getType), id] }]}.inject(&:merge).each {|k,vs| p Hash[k.join(' #'), vs.map {|v| v.join(' #') }.join(', ')] }
+{"Stockpile #11"=>"Still #865, Stockpile #898, Stockpile #898, Stockpile #1875, Stockpile #1875, Jewelers #2147, Jewelers #2147, Jewelers #2148, Jewelers #2148, Stockpile #2155, Stockpile #2155"}
+{"Still #865"=>"Stockpile #11, Stockpile #54, Stockpile #867, Stockpile #1138"}
+{"Stockpile #54"=>"Still #865, Kitchen #866, Stockpile #1448, Stockpile #1448, Stockpile #1449, Stockpile #1449, Kitchen #1466, Kitchen #1467"}
+{"Kitchen #866"=>"Stockpile #54, Stockpile #867, Stockpile #2292"}
+{"Kitchen #1466"=>"Stockpile #54, Stockpile #2292"}
+{"Kitchen #1467"=>"Stockpile #54, Stockpile #2292"}
+{"Farmers #56"=>"Stockpile #864"}
+{"Quern #57"=>"Stockpile #864"}
+{"Quern #68"=>"Stockpile #864"}
+{"Fishery #2176"=>"Stockpile #864"}
+{"Stockpile #864"=>"Farmers #56, Quern #57, Quern #68, Fishery #2176"}
+...
+
+
+
+[DFHack]# rb puts df.world.raws.itemdefs.all.each_with_index.map {|item, index| index.to_s + ' - ' + item.id }
+0 - ITEM_AMMO_BOLTS
+1 - ITEM_AMMO_ARROWS
+2 - ITEM_AMMO_BLOWDARTS
+3 - ITEM_ARMOR_BREASTPLATE
+...
+10 - ITEM_ARMOR_TOGA
+...
+15 - ITEM_FOOD_BISCUITS
+16 - ITEM_FOOD_STEW
+17 - ITEM_FOOD_ROAST
+18 - ITEM_GLOVES_GAUNTLETS
+...
+22 - ITEM_HELM_CAP
+...
+30 - ITEM_PANTS_GREAVES
+...
+288 - HF96 EI1SH1
+
+Doesn't seem to correspond to any enum, or stockpile type list.
+
+
+furniture.mats # 307 - Contains 89 stones + 36 metals
+stone.mats # 307 - 88 stones(?!) - 5 clay, 12 economic, 16 metal ores, 55 other
+
+How do you iterate that? A list of indexes? Ugh. Can I crib from an existing list?
+
+# Stone - Metal Ores
+[DFHack]# rb p Bac().stone.mats.each_with_index.map {|x, i| [i, x] }.reject {|a,b| !b }.map {|a,b| a }
+[186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 198, 201, 202, 211, 221, 226]
+
+Stone/ 88 total
+Metal Ores: 16
+Economic: 12
+Other Stone: 55
+Clay: 5
+
+Ores all have flag[:METAL_ORE], and nothing else does.
+[167, 169, 171, 185, 196, 197, 203, 230, 235, 237, 238, 239]
+
+All Economic have economic_uses, but some others do as well.
+All are flagged is_stone, as are many other items
+inorganics: +economic_uses -flags :METAL_ORE and :SOIL and material flags :IS_METAL
+
+# rb Sp.settings.stone.mats.each_with_index {|x,i| r = df.world.raws.inorganics[i] ; p [i, r.id, r.flags.active, r.material.flags.active] if x }
+[167, "LIMESTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY, :SEDIMENTARY_OCEAN_DEEP], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[169, "DOLOMITE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[171, "CHALK", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[185, "MARBLE", [:ENVIRONMENT_NON_SOIL_OCEAN, :METAMORPHIC], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[196, "COAL_BITUMINOUS", [:ENVIRONMENT_NON_SOIL_OCEAN], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[197, "LIGNITE", [:ENVIRONMENT_NON_SOIL_OCEAN], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[203, "GYPSUM", [:ENVIRONMENT_NON_SOIL_OCEAN], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[230, "KAOLINITE", [:ENVIRONMENT_NON_SOIL_OCEAN], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[235, "CALCITE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[237, "ALABASTER", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[238, "SELENITE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[239, "SATINSPAR", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+
+[186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 198, 201, 202, 211, 221, 226]
+
+
+[DFHack]# rb Sp.settings.stone.mats.each_with_index {|x,i| r = df.world.raws.inorganics[i] ; p [i, r.id, r.flags.active, r.material.flags.active] if x }
+[161, "SANDSTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY, :SEDIMENTARY_OCEAN_SHALLOW, :AQUIFER], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[162, "SILTSTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[163, "MUDSTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[164, "SHALE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY, :SEDIMENTARY_OCEAN_SHALLOW], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[165, "CLAYSTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+...
+
+Clay: Not everything with id =~ /clay/ is in the list
+inorganic: +/clay/i - flags :AQUIFER and material_flag :IS_STONE
+
+[244, "CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[245, "SILTY_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[246, "SANDY_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[247, "CLAY_LOAM", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[264, "FIRE_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+
+[244, 245, 246, 247, 264]
+
+
+Some things flagged is_stone aren't in the stone list. Plaster, ceramic, and glazes, and some things in the list aren't stone, such as the five Clays.
+
+[26, "PLASTER", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+[27, "CERAMIC_EARTHENWARE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :DISPLAY_UNGLAZED, :NO_STONE_STOCKPILE, 74]]
+[28, "CERAMIC_STONEWARE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE, 74]]
+[29, "CERAMIC_PORCELAIN", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE, 74]]
+[30, "ASH_GLAZE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+[31, "TIN_GLAZE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+
+[165, "CLAYSTONE", [:ENVIRONMENT_NON_SOIL_OCEAN, :SEDIMENTARY], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE]]
+[244, "CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[245, "SILTY_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[246, "SANDY_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[247, "CLAY_LOAM", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+[248, "SANDY_CLAY_LOAM", [:ENVIRONMENT_NON_SOIL_OCEAN, :AQUIFER, :SOIL_ANY, :SOIL], []]
+[249, "SILTY_CLAY_LOAM", [:ENVIRONMENT_NON_SOIL_OCEAN, :AQUIFER, :SOIL_ANY, :SOIL], []]
+[261, "PELAGIC_CLAY", [:AQUIFER, :SOIL_ANY, :SOIL_OCEAN], []]
+[264, "FIRE_CLAY", [:ENVIRONMENT_NON_SOIL_OCEAN, :SOIL_ANY, :SOIL], []]
+
+--
+# rb Clay = Sp.settings.stone.mats.each_with_index.select {|x,i| r = df.world.raws.inorganics[i] ; !r.id =~ /clay/i && !r.flags[:AQUIFER] && !r.material.flags[:IS_STONE] }.map {|a,b| b }
+
+# rb Econ = Sp.settings.stone.mats.each_with_index.select {|x,i| r = df.world.raws.inorganics[i] ; !r.economic_uses.empty? && !r.flags[:METAL_ORE] && !r.flags[:SOIL] && !r.map {|a,b| b }
+
+# rb Ore = Sp.settings.stone.mats.each_with_index.select {|x,i| r = df.world.raws.inorganics[i] ; r.flags[:METAL_ORE] }.map {|a,b| b }
+
+# rb Stone = Sp.settings.stone.mats.each_with_index.select {|x,i| r = df.world.raws.inorganics[i] ; r.material.flags[:IS_STONE] }.map {|a,b| b }
+
+# rb (Stone - Ore - Econ - Clay).length
+# Not quite - 61 instead of 55.
+
+# rb (Stone - Ore - Econ - Other - Clay).each_with_index {|i| r = df.world.raws.inorganics[i] ; p [i, r.id, r.flags.active, r.material.flags.active] }
+[26, "PLASTER", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+[27, "CERAMIC_EARTHENWARE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :DISPLAY_UNGLAZED, :NO_STONE_STOCKPILE, 74]]
+[28, "CERAMIC_STONEWARE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE, 74]]
+[29, "CERAMIC_PORCELAIN", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE, 74]]
+[30, "ASH_GLAZE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+[31, "TIN_GLAZE", [], [:ITEMS_HARD, :ITEMS_QUERN, :IS_STONE, :NO_STONE_STOCKPILE]]
+
+:NO_STONE_STOCKPILE
+
+[DFHack]# rb p df.world.raws.own_methods
+[:anon_1, :anon_1=, :anon_2, :anon_2=, :anon_3, :anon_3=, :body_detail_plans, :body_detail_plans=, :body_templates, :body_templates=, :bodyglosses, :bodyglosses=, :buildings, :buildings=, :creature_variations, :creature_variations=, :creatures, :creatures=, :descriptors, :descriptors=, :effects, :effects=, :entities, :entities=, :inorganics, :inorganics=, :inorganics_subset, :inorganics_subset=, :interactions, :interactions=, :itemdefs, :itemdefs=, :language, :language=, :mat_table, :mat_table=, :material_templates, :material_templates=, :plants, :plants=, :reactions, :reactions=, :syndromes, :syndromes=, :tissue_templates, :tissue_templates=]
+[DFHack]# rb p df.world.raws.mat_table
+#<SpecialMatTable organic_types=[Meat=[419, 419, 21, 25 ...
+
+[DFHack]# rb p df.world.raws.mat_table.own_methods
+[:builtin, :builtin=, :organic_indexes, :organic_indexes=, :organic_types, :organic_types=, :organic_unknown, :organic_unknown=]
+
+[DFHack]# rb p df.world.raws.mat_table.builtin.length
+659
+
+[DFHack]# rb p df.world.raws.mat_table.builtin.first
+#<Material id="INORGANIC" gem_name1="" gem_name2="" stone_name="" ...
+
+[DFHack]# rb p df.world.raws.mat_table.builtin.to_a.each_with_index.map {|x,i| [i, x] }.select {|a,b| b }.map {|a,b| [a,b.id] }
+[[0, "INORGANIC"], [1, "AMBER"], [2, "CORAL"], [3, "GLASS_GREEN"], [4, "GLASS_CLEAR"], [5, "GLASS_CRYSTAL"], [6, "WATER"], [7, "COAL"], [8, "POTASH"], [9, "ASH"], [10, "PEARLASH"], [11, "LYE"], [12, "MUD"], [13, "VOMIT"], [14, "SALT"], [15, "FILTH_B"], [16, "FILTH_Y"], [17, "UNKNOWN_SUBSTANCE"], [18, "GRIME"], [19, "CREATURE_1"], [419, "PLANT_1"]]
+
+[DFHack]# rb p df.world.raws.mat_table.own_methods
+[:builtin, :builtin=, :organic_indexes, :organic_indexes=, :organic_types, :organic_types=, :organic_unknown, :organic_unknown=]
+[DFHack]# rb p df.world.raws.mat_table.organic_indexes.length
+39
+[DFHack]# rb p df.world.raws.mat_table.organic_indexes.first.length
+10144
+
+[DFHack]# rb p df.world.raws.inorganics.length
+307
+[DFHack]# rb p df.world.raws.inorganics[0]
+#<InorganicRaw id="IRON" str=["[USE_MATERIAL_TEMPLATE:METAL_TEMPLATE]", ...
+
+[DFHack]# rb p df.world.raws.inorganics_subset.length ## Subset? Why?
+167
+[DFHack]# rb p df.world.raws.inorganics_subset.first
+#<InorganicRaw id="COPPER" str=["[USE_MATERIAL_TEMPLATE:METAL_TEMPLATE]" ...
+
+
+[DFHack]# rb p df.world.raws.plants.all.length
+224
+[DFHack]# rb p df.world.raws.plants.all.first
+#<PlantRaw id="SINGLE-GRAIN_WHEAT" index=0 anon_1=[408614800,
+
+[DFHack]# rb p df.world.raws.creatures.all.length
+910
+[DFHack]# rb p df.world.raws.creatures.all.first
+#<CreatureRaw creature_id="TOAD" name=["toad", "toads", "toad"] ...
+
+[DFHack]# rb p df.world.raws.material_templates.to_a.length
+70
+[DFHack]# rb p df.world.raws.material_templates.first
+#<MaterialTemplate id="STONE_TEMPLATE" gem_name1="" gem_name2="" stone_name="" ...
+[DFHack]# rb p df.world.raws.material_templates.last
+#<MaterialTemplate id="SWEAT_TEMPLATE" gem_name1="" ...
+
+[DFHack]# rb p df.world.raws.interactions.length
+171
+[DFHack]# rb p df.world.raws.interactions.first
+#<Interaction name="CLEANING" id=0 str=["[I_SOURCE:CREATURE_ACTION]", "[I_TARGET:A:CREATURE]", "[IT_LOCATION:CONTEXT_CREATURE]", "[IT_MANUAL_INPUT:creature]", ...
+[DFHack]# rb p df.world.raws.interactions.last
+#<Interaction name="DEITY_CURSE_VAMPIRE_11" id=170 str=["[GENERATED]", "[I_SOURCE:DEITY]", "[IS_USAGE_HINT:MAJOR_CURSE]", "[IS_HIST_STRING_1: cursed ]", ...
+
+[DFHack]# rb p M(419,205).plant
+#<PlantRaw id="NETHER_CAP" index=205
+
+[DFHack]# rb p M(419,205).plant.flags
+#<DfFlagarray TREE_HAS_MUSHROOM_CAP WET DRY BIOME_SUBTERRANEAN_WATER TWIGS_SIDE_BRANCHES TREE TWIGS_ABOVE_BRANCHES>
+[DFHack]# rb p M(419,205).plant.flags[:TREE]
+true
+
+MaterialID -> Material = m_id.material
+MaterialID -> PlantRaw = m_id.plant
+..            Inorganic = m_id.inorganic
+
+
+# rb p DFHack::OrganicMatCategory::NUME
+{:Meat=>0, :Fish=>1, :UnpreparedFish=>2, :Eggs=>3, :Plants=>4, :PlantDrink=>5, :CreatureDrink=>6, :PlantCheese=>7, :CreatureCheese=>8, :Seed=>9, :Leaf=>10, :PlantPowder=>11, :CreaturePowder=>12, :Glob=>13, :PlantLiquid=>14, :CreatureLiquid=>15, :MiscLiquid=>16, :Leather=>17, :Silk=>18, :PlantFiber=>19, :Bone=>20, :Shell=>21, :Wood=>22, :Horn=>23, :Pearl=>24, :Tooth=>25, :EdibleCheese=>26, :AnyDrink=>27, :EdiblePlant=>28, :CookableLiquid=>29, :CookablePowder=>30, :CookableSeed=>31, :CookableLeaf=>32, :Paste=>33, :Pressed=>34, :Yarn=>35, :MetalThread=>36}
+
+# rb p df.world.raws.mat_table.organic_types.map {|x| x.length }
+10144, 75, 75, 203, 224, 76, 2, 0, 24, 157, 74, 33, 0, 1698, 9, 136, 2, 657, 31, 8, 718, 35, 71, 98, 0, 797, 24, 78, 26, 36, 29, 79, 74, 13, 7, 4, 1, 9, 657
+
+# rb p df.world.raws.mat_table.organic_types.each_with_index.map {|x,i| [i,x.length] }
+[[0, 10144], [1, 75], [2, 75], [3, 203], [4, 224], [5, 76], [6, 2], [7, 0], [8, 24], [9, 157], [10, 74], [11, 33], [12, 0], [13, 1698], [14, 9], [15, 136], [16, 2], [17, 657], [18, 31], [19, 8], [20, 718], [21, 35], [22, 71], [23, 98], [24, 0], [25, 797], [26, 24], [27, 78], [28, 26], [29, 36], [30, 29], [31, 79], [32, 74], [33, 13], [34, 7], [35, 4], [36, 1], [37, 9], [38, 657]]
+
+Leather stockpiles have 657 materials.
+
+[DFHack]# rb p df.world.raws.mat_table.builtin.each_with_index.select {|x,i| x }.map {|a,b| b }
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 419]
+[DFHack]# rb p df.world.raws.mat_table.builtin[18]
+#<Material id="GRIME" ...
+[DFHack]# rb p df.world.raws.mat_table.builtin[19]
+#<Material id="CREATURE_1" ...
+[DFHack]# rb p df.world.raws.mat_table.builtin[419]
+#<Material id="PLANT_1" ...
+
+Raws have a one-to-many correspondence to materials
+
+910 creatures, 910 stockpile animals. Is it sparse? % 18?
+
+[DFHack]# rb Sp.settings.animals.animals.each_with_index {|c,i| next unless (i % 18).zero? ; p [c.index, c.token] ; c.enable }
+[0, "TOAD"]
+[18, "RW_BLACKBIRD_MAN"]
+[36, "GIANT_CROW"]
+...
+
+
+[DFHack]# rb DFStock.constants.map {|x| DFStock.const_get x }.select {|x| x.is_a?(Class) && x < DFStock::Thing }.sort_by {|x| x.to_s }.map {|x| p x ; x.new(x.index_translation.length - 1) }.map {|x| p x ; p [x.class, x.token] }
+
+became DFStock.test, and the list DFStock.testable_classes, of which there are 59!
+
+[DFHack]# rb Bac().categories.select {|c| c.enabled? }.map(&:arrays).flatten.each {|x| X = x ; puts x.token ; x.enable }
+Tests the linkages. Found four instances of passing an improperly translated index.
+
+[DFHack]# rb p df.world.buildings.other.to_hash[:BED].map {|x| x.contained_items.first.item.quality }
+[:Masterful, :Masterful, :Masterful, :Exceptional, ...
+
+------
+
+2021-08-30
+
+The material-info type for plants
+PLANT_MAT:TWO-GRAIN_WHEAT:STRUCTURAL
+PLANT_MAT:TWO-GRAIN_WHEAT:DRINK
+PLANT_MAT:TWO-GRAIN_WHEAT:MILL
+PLANT_MAT:TWO-GRAIN_WHEAT:LEAF
+PLANT_MAT:TWO-GRAIN_WHEAT:SEED
+PLANT_MAT:TWO-GRAIN_WHEAT
+
+Similar to Creature_Mat and C_M:Forgotten_Beast_, where there's a base type and a bunch (even more though) subtypes.
+
+For stockpiles, by type (leaf) and by plant (wheat) selectors.
+
