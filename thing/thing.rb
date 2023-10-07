@@ -84,8 +84,8 @@ module DFStock
 
     # Linkage
     def set x ; category.set_item(stock_subcategory_name, link_index, !!x) end
-    def get   ; category.get_item(stock_subcategory_name, link_index)      end
-    def  enabled? ; !!(get rescue false) end
+    def get   ; category.enabled? && category.get_item(stock_subcategory_name, link_index)      end
+    def  enabled? ; get rescue false end
     def disabled? ; !enabled? end
     def  enable   ; set true end
     def disable   ; set false end
@@ -159,7 +159,7 @@ module DFStock
     end
     def to_s
       refs = references.map {|sc, idx| next if sc == self.class ; "#{self.class.format_classname sc}_index=#{idx}" }.compact.join(' ')
-      "#{self.class.name} name=#{name.inspect} enabled=#{!!enabled?} " +
+      "#{self.class.name} name=#{name.inspect} #{"enabled=#{!!enabled?} " if !!category}" +
       "#{"#{refs} " unless refs.empty?}link_index=#{link_index}"
     end
     def inspect ; "#<#{to_s}>" rescue super end

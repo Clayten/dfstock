@@ -19,6 +19,7 @@ module DFHack::StockForwarder
   def animals             ; settings.animals end
   def food                ; settings.food end
   def furniture           ; settings.furniture end
+  def corpses             ; settings.corpses end
   def refuse              ; settings.refuse end
   def stone               ; settings.stone end
   def ammo                ; settings.ammo end

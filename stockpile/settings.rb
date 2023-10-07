@@ -22,6 +22,24 @@ module DFStock::StockFinder
     }
   end
 
+  def enable_subcategories
+    p [:enable_subcategories, self.class]
+    return true if enabled? # Don't muck with anything
+    parent.flags.send("#{stock_category_method}=", true)
+    return true unless respond_to? :features
+    features.each {|t,n1,n2,k|
+      next unless :array == t
+      n = (n1 || n2).to_s
+      bool_name = "array_#{n}"
+      next unless instance = k.instances.last
+      last_index = k.instances.last.link_index
+      # p [:creating_arrays_for, stock_category_name, :klass, k, :names, [n1, n2], :bool_array_name, bool_name, :num_instances, k.num_instances, :last_index, last_index]
+      bool_array = send bool_name
+      0.upto(last_index).each {|i| bool_array[i] = false }
+    }
+    enabled?
+  end
+
   def all_items ; arrays.values.flatten end
   def enabled_items ; all_items.select {|i| i.enabled? } end
   def enabled_pathnames ; enabled_items.map(&:pathname) end
@@ -41,19 +59,21 @@ module DFStock::StockFinder
   def     set x  ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}=", !!x ; enabled? end
   def     get    ; pr = parent ; raise "Unable to link to parent" unless pr ; pr.flags.send "#{stock_category_method}" end
   def  enabled?  ; !!get end
-  def  enable    ; set true  end
+  def  enable    ; enable_subcategories unless enabled? ; set true end
   def disable    ; set false end
 
   def link_array_by_subcategory sc
+    # p [:labs, sc, self]
     f = features.find {|_,bn,dn,_| (dn || bn) == sc }
     raise "No such subcategory as #{sc}" unless f
     nm = 'array_' + f[1].to_s
     boolean_array = send nm
-    raise "#{stock_category_name} not enabled!" if boolean_array.empty?
+    raise "Category #{stock_category_name} not enabled!" unless enabled?
+    raise "SubCategory #{sc} not enabled!" if boolean_array.empty?
     boolean_array
   end
-  def set_item subcategory, index, value ;   link_array_by_subcategory(subcategory)[index] = !!value end
-  def get_item subcategory, index        ; !!link_array_by_subcategory(subcategory)[index] end
+  def set_item subcategory, index, value ; enable unless enabled? ; link_array_by_subcategory(subcategory)[index] = !!value end
+  def get_item subcategory, index        ;                        !!link_array_by_subcategory(subcategory)[index] end
 
   def all_other_categories ; parent.categories.reject {|k,v| k == stock_category_method }.map {|k,v| v } end
 
@@ -76,59 +96,43 @@ end
 
 # The Settings Categories are intended to have accessors for classes of items
 class DFHack::StockpileSettings_TAnimals
-  def enable ; raise "Not functional, doesn't enable entries" end
 end
 class DFHack::StockpileSettings_TFood
-  def enable ; raise "Not functional, can't enable sub-categories" end
   def cookable      ; all_items.select(&:edible_cooked?) ; end # just the items, across sub-categories, that can become a meal in a kitchen
   def needs_cooking ; cookable.select {|f| !f.edible_raw? } ; end # just the items, across sub-categories, that need a kitchen to become food
 end
 class DFHack::StockpileSettings_TFurniture
-  def enable ; raise "Not functional, doesn't enable entries" end
 end
 class DFHack::StockpileSettings_TCorpse
   def _memaddr ; hash end # Fake, just to identify the same instance
   def arrays ; {} end # No arrays of items
-  def enable ; raise "Not functional" end
 end
 class DFHack::StockpileSettings_TRefuse
-  def enable ; raise "Not functional, crashes" end
+  def enable ; raise "#{stock_category_name}#enable Not functional" end
 end
 class DFHack::StockpileSettings_TStone
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TAmmo
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TCoins
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TBarsBlocks
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TGems
-  def enable ; raise "Not functional, crashes" end
 end
 class DFHack::StockpileSettings_TFinishedGoods
-  def enable ; raise "Not functional, crashes" end
 end
 class DFHack::StockpileSettings_TLeather
-  def enable ; raise "Not functional, doesn't enable entries" end
 end
 class DFHack::StockpileSettings_TCloth
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TWood
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TWeapons
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TArmor
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 class DFHack::StockpileSettings_TSheet
-  def enable ; raise "Not functional, can't enable sub-categories" end
 end
 
 module DFHack::StockComparator
@@ -177,7 +181,7 @@ class DFHack::StockpileSettings
       Animals: 'animals',
       Food: 'food',
       Furniture: 'furniture',
-      # Corpse: 'corpses', # Non-functional, so don't iterate over it
+      Corpse: 'corpses',
       Refuse: 'refuse',
       Stone: 'stone',
       Ammo: 'ammo',
@@ -238,10 +242,10 @@ class DFHack::StockpileSettings
 
   def status
     puts "StockSelection:"
-    puts "\tAllow Organics: #{allow_organic}.\n\tAllow Inorganics: #{allow_inorganic}"
+    puts "\tAllow Organics: #{allow_organic}\n\tAllow Inorganics: #{allow_inorganic}"
 
     categories.each {|k, c|
-      puts "#{'%20s' % k} #{c.enabled?}"
+      puts "#{'%20s' % k} #{c.enabled?} - #{c.enabled_pathnames.length} items enabled" if c.enabled?
     }
     true
   end
