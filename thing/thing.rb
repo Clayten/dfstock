@@ -96,7 +96,7 @@ module DFStock
       t = Regexp.new n, Regexp::IGNORECASE
       instances.select {|i| i.name =~ t }
     end
-    def self.[] n ; self.lookup_by_name n end
+    def self.[] n ; self.lookup_by_name n.to_s end
 
     def self.token_index ; cache([:token_index, self]) { Hash[*instances.map(&:token).each_with_index.map {|t,i| [t, i] }.flatten] } end
 
