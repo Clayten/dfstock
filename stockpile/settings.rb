@@ -108,7 +108,7 @@ class DFHack::StockpileSettings_TCorpse
   def arrays ; {} end # No arrays of items
 end
 class DFHack::StockpileSettings_TRefuse
-  def enable ; raise "#{stock_category_name}#enable Not functional" end
+  def enable ; raise NotImplementedError, "#{stock_category_name}#enable Not functional" end
 end
 class DFHack::StockpileSettings_TStone
 end
